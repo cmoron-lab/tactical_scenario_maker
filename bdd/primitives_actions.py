@@ -1,0 +1,69 @@
+import gtpyhop
+from rclpy.action import ActionClient
+from geographic_msgs.msg import GeoPoint
+from lotusim_msgs.msg import MASCmd as MASCmdMsg
+from lotusim_msgs.action import MASCmd
+from lotusim_msgs.srv import SetWaypoints
+
+
+def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angular_velocities_limits):
+    import main
+    spawn = ActionClient(node, MASCmd, "/lotusim/mas_cmd")
+    spawn.wait_for_server()
+
+    cmd = MASCmdMsg()
+    cmd.cmd_type    = MASCmdMsg.CREATE_CMD
+    cmd.model_name  = model
+    cmd.vessel_name = vessel
+    cmd.geo_point   = GeoPoint(latitude=init_pos[0], longitude=init_pos[1], altitude=0.0)
+    cmd.sdf_string  = f"""
+        <lotus_param>
+            <waypoint_follower>
+                <follower>
+                    <loop>false</loop>
+                    <range_tolerance>2</range_tolerance>
+                    <linear_velocities_limits>{linear_velocities_limits[0]} {linear_velocities_limits[1]}</linear_velocities_limits>
+                    <angular_velocities_limits>{angular_velocities_limits}</angular_velocities_limits>
+                </follower>
+            </waypoint_follower>
+        </lotus_param>
+    """
+
+    goal = MASCmd.Goal()
+    goal.cmd = cmd
+
+    fut = spawn.send_goal_async(goal)
+    main._wait(fut, timeout=10.0)
+    if not fut.done() or fut.result() is None:
+        raise RuntimeError(f"spawn_vessel: pas de réponse pour '{vessel}'")
+    res_fut = fut.result().get_result_async()
+    main._wait(res_fut, timeout=10.0)
+    if not res_fut.done() or res_fut.result() is None:
+        raise RuntimeError(f"spawn_vessel: timeout résultat pour '{vessel}'")
+    node.get_logger().info(f"Spawned: {res_fut.result().result.name}")
+
+
+def send_mas_cmd(state, agent, pos):
+    import main
+    node = main._ros_node
+    cli = node.create_client(SetWaypoints, f"/lotusim/{agent}/waypoints")
+    cli.wait_for_service()
+
+    req = SetWaypoints.Request()
+    req.path = [GeoPoint(latitude=pos[0], longitude=pos[1], altitude=0.0)]
+    req.loop = False
+
+    fut = cli.call_async(req)
+    main._wait(fut)
+    node.get_logger().info(f"[{agent}] → ({pos[0]:.5f}, {pos[1]:.5f})")
+    if main._waypoint_log:
+        with main._waypoint_log_lock:
+            main._waypoint_log[0].writerow([main._ts(), agent, pos[0], pos[1]])
+            main._waypoint_log[1].flush()
+
+    state.agents[agent]['x'] = pos[0]
+    state.agents[agent]['y'] = pos[1]
+    return state
+
+
+gtpyhop.declare_actions(send_mas_cmd)
