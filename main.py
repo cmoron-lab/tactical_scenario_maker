@@ -1,45 +1,79 @@
 #!/usr/bin/env python3
 """
-HTN v1 - spawn des USV, surveillance réactive, interception.
+HTN - agents autonomes avec surveillance réactive et interception.
 """
+import csv
 import math
+import os
 import time
 import threading
+from datetime import datetime, timezone
 import gtpyhop
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
-from geographic_msgs.msg import GeoPoint
-from lotusim_msgs.msg import MASCmd as MASCmdMsg, VesselPositionArray
-from lotusim_msgs.action import MASCmd
-from lotusim_msgs.srv import SetWaypoints
+from lotusim_msgs.msg import VesselPositionArray
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 _ros_node = None
+_pose_log = None
+_waypoint_log = None
+_waypoint_log_lock = threading.Lock()
 
-DETECTION_RADIUS_DEG = 0.001  # ~1 km
+DETECTION_RADIUS_DEG = 0.003
+MIN_MOVE_DEG = 0.0003  # ~30m : seuil avant de renvoyer un waypoint à suivre
 
-AGENTS = {
-    "usv_0": {
-        'x': 1.2605794416293148,
-        'y': 103.7516212463379,
-        'model': 'wamv',
-        'goal': [('veille', 'usv_0')],
-    },
-    "intru": {
-        'x': 1.2605687153898033,
-        'y': 103.74297380447389,
-        'model': 'wamv',
-        'goal': [('aller', 'intru', (1.2605365366710013, 103.75801563262941))],
-    },
-}
+# ── Fonctions utilitaires ─────────────────────────────────────────────────────
 
-# ── Utilitaire : attendre un future sans bloquer l'executor ──────────────────
+def _ts():
+    return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+
+def init_logs():
+    global _pose_log, _waypoint_log
+    os.makedirs('logs', exist_ok=True)
+    pf = open('logs/poses.csv', 'w', newline='')
+    wf = open('logs/waypoints.csv', 'w', newline='')
+    _pose_log = csv.writer(pf)
+    _waypoint_log = (csv.writer(wf), wf)
+    _pose_log.writerow(['timestamp', 'agent', 'lat', 'lon'])
+    _waypoint_log[0].writerow(['timestamp', 'agent', 'lat', 'lon'])
+
+def in_zone(center, pos, radius):
+    return math.hypot(center['lat'] - pos['lat'], center['lon'] - pos['lon']) < radius
+
+# ── PoseTracker ───────────────────────────────────────────────────────────────
+
+class PoseTracker:
+    """Source de vérité pour les positions, mise à jour par ROS."""
+
+    def __init__(self):
+        self._data = {}
+        self._lock = threading.Lock()
+
+    def start(self, node):
+        node.create_subscription(VesselPositionArray, "/lotusim/poses", self._cb, 10)
+
+    def _cb(self, msg):
+        ts = _ts()
+        with self._lock:
+            for v in msg.vessels:
+                self._data[v.vessel_name] = {
+                    'lat': v.geo_point.latitude,
+                    'lon': v.geo_point.longitude,
+                }
+                if _pose_log:
+                    _pose_log.writerow([ts, v.vessel_name, v.geo_point.latitude, v.geo_point.longitude])
+
+    def get(self, name):
+        with self._lock:
+            return self._data.get(name)
+
+tracker = PoseTracker()
+
+# ── Utilitaire futures ────────────────────────────────────────────────────────
 
 def _wait(fut, timeout=10.0):
-    """Attend un rclpy Future depuis n'importe quel thread."""
     done = threading.Event()
     fut.add_done_callback(lambda _: done.set())
     done.wait(timeout=timeout)
@@ -48,111 +82,37 @@ def _wait(fut, timeout=10.0):
 
 gtpyhop.Domain('htn_v1')
 
-def aller_m(state, agent, pos):
-    return [('send_mas_cmd', agent, pos)]
+_last_sent = {}  # agent -> (lat, lon) du dernier waypoint envoyé
 
-def veille_m(state, agent):
-    own = state.agents.get(agent)
-    if own is None:
-        return False
-    for name, data in state.agents.items():
-        if name == agent:
-            continue
-        dist = math.hypot(own['x'] - data['x'], own['y'] - data['y'])
-        if dist < DETECTION_RADIUS_DEG:
-            _ros_node.get_logger().info(
-                f"[HTN] {agent} détecte {name} à {dist:.4f}° → interception")
-            return [('aller', agent, (data['x'], data['y']))]
-    return False
+# garantit que "import main" depuis bdd/ retrouve CE module même quand lancé comme __main__
+import sys as _sys; _sys.modules.setdefault('main', _sys.modules[__name__])
 
-def send_mas_cmd(state, agent, pos):
-    node = _ros_node
-    node.get_logger().info(f"[HTN] {agent} → {pos}")
+# imports après définition des globals pour éviter les imports circulaires
+from bdd.events import EventChecker             
+from bdd.primitives_actions import spawn_vessel 
+import bdd.tasks_methods                        
+from scenarios.scenario_1 import AGENTS         
 
-    cli = node.create_client(SetWaypoints, f"/lotusim/{agent}/waypoints")
-    while not cli.wait_for_service(timeout_sec=1.0):
-        node.get_logger().info(f"Attente service waypoints {agent}...")
+# ── Boucle agent ──────────────────────────────────────────────────────────────
 
-    req = SetWaypoints.Request()
-    req.path = [GeoPoint(latitude=pos[0], longitude=pos[1], altitude=0.0)]
-    req.loop = False
-
-    fut = cli.call_async(req)
-    _wait(fut)
-    node.get_logger().info(f"Waypoint envoyé à {agent}, success={fut.result().success}")
-
-    state.agents[agent]['x'] = pos[0]
-    state.agents[agent]['y'] = pos[1]
-    return state
-
-gtpyhop.declare_task_methods('aller', aller_m)
-gtpyhop.declare_task_methods('veille', veille_m)
-gtpyhop.declare_actions(send_mas_cmd)
-
-# ── PoseTracker ───────────────────────────────────────────────────────────────
-
-class PoseTracker:
-    def __init__(self, node, state):
-        self._state = state
-        node.create_subscription(VesselPositionArray, "/lotusim/poses", self._cb, 10)
-
-    def _cb(self, msg):
-        for v in msg.vessels:
-            if v.vessel_name in self._state.agents:
-                self._state.agents[v.vessel_name]['x'] = v.geo_point.latitude
-                self._state.agents[v.vessel_name]['y'] = v.geo_point.longitude
-
-# ── ROS2 helpers ──────────────────────────────────────────────────────────────
-
-def spawn_vessel(node, vessel, init_pos, model,
-                 linear_velocities_limits=(0, 5), angular_velocities_limits=0.05):
-    spawn = ActionClient(node, MASCmd, "/lotusim/mas_cmd")
-    spawn.wait_for_server()
-
-    cmd = MASCmdMsg()
-    cmd.cmd_type    = MASCmdMsg.CREATE_CMD
-    cmd.model_name  = model
-    cmd.vessel_name = vessel
-    cmd.geo_point   = GeoPoint(latitude=init_pos[0], longitude=init_pos[1], altitude=0.0)
-    cmd.sdf_string  = f"""
-        <lotus_param>
-            <waypoint_follower>
-                <follower>
-                    <loop>false</loop>
-                    <range_tolerance>2</range_tolerance>
-                    <linear_velocities_limits>{linear_velocities_limits[0]} {linear_velocities_limits[1]}</linear_velocities_limits>
-                    <angular_velocities_limits>{angular_velocities_limits}</angular_velocities_limits>
-                </follower>
-            </waypoint_follower>
-        </lotus_param>
-    """
-
-    goal = MASCmd.Goal()
-    goal.cmd = cmd
-
-    # To know if the Lotusim server has accepted the goal
-    fut = spawn.send_goal_async(goal)
-    _wait(fut, timeout=10.0)
-    if not fut.done() or fut.result() is None:
-        raise RuntimeError(f"spawn_vessel: pas de réponse pour '{vessel}'")
-
-    res_fut = fut.result().get_result_async()
-    _wait(res_fut, timeout=10.0)
-    if not res_fut.done() or res_fut.result() is None:
-        raise RuntimeError(f"spawn_vessel: timeout résultat pour '{vessel}'")
-
-    node.get_logger().info(f"Spawned: {res_fut.result().result.name}")
-
-def run_agent(name, info, state, node):
-    """Boucle de replanning pour un agent (thread séparé)."""
-    goal = info['goal']
-    while rclpy.ok():
-        plan = gtpyhop.find_plan(state, goal)
-        if plan:
-            node.get_logger().info(f"[{name}] Mission accomplie : {plan}")
-            break  # waypoint envoyé, mission terminée
+def run_agent(name, mission, state, node):
+    current = mission
+    while rclpy.ok() and current is not None:
+        for event_name, next_mission in current.get('on_interrupt', {}).items():
+            fn = getattr(EventChecker, event_name, None)
+            if fn and fn():
+                node.get_logger().info(f"[{name}] '{event_name}' → {next_mission['task']}")
+                current = next_mission
+                break
         else:
-            time.sleep(1.0)
+            plan = gtpyhop.find_plan(state, [current['task']])
+            if plan:
+                if current.get('loop_interval'):
+                    time.sleep(current['loop_interval'])
+                else:
+                    current = current.get('on_complete')
+            else:
+                time.sleep(1.0)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -164,35 +124,43 @@ def main():
 
     executor = MultiThreadedExecutor()
     executor.add_node(node)
-    executor_thread = threading.Thread(target=executor.spin, daemon=True)
-    executor_thread.start()
+    threading.Thread(target=executor.spin, daemon=True).start()
 
     try:
+        gtpyhop.verbose = 0
         state = gtpyhop.State('initial_state')
         state.agents = {
             name: {'x': info['x'], 'y': info['y'], 'model': info['model']}
             for name, info in AGENTS.items()
         }
 
-        PoseTracker(node, state)
+        init_logs()
+        tracker.start(node)
 
         for name, info in AGENTS.items():
-            spawn_vessel(node, name, (info['x'], info['y']), info['model'])
+            spawn_vessel(node, name, (info['x'], info['y']), info['model'],
+            info.get('linear_velocities_limits', (0, 5)),
+            info.get('angular_velocities_limits', 0.05))
             time.sleep(3.0)
 
         threads = [
-            threading.Thread(target=run_agent, args=(name, info, state, node), daemon=True)
+            threading.Thread(
+                target=run_agent,
+                args=(name, info['mission'], state, node),
+                daemon=True,
+            )
             for name, info in AGENTS.items()
         ]
         for t in threads:
             t.start()
-
         for t in threads:
             t.join()
 
     except KeyboardInterrupt:
         pass
     finally:
+        if _waypoint_log:
+            _waypoint_log[1].close()
         executor.shutdown()
         node.destroy_node()
         rclpy.shutdown()

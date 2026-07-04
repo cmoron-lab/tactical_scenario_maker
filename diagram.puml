@@ -1,0 +1,124 @@
+@startuml main
+
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor White
+    BorderColor #333333
+    ArrowColor #333333
+}
+skinparam stereotypeCBackgroundColor #E8E8E8
+skinparam stereotypeABackgroundColor #DDEEFF
+
+' ── Classes définies dans main.py ─────────────────────────────────────────────
+
+class PoseTracker {
+    - _data  : dict[str, dict]
+    - _lock  : threading.Lock
+    --
+    + start(node : Node) : void
+    + get(name : str) : dict | None
+    - _cb(msg : VesselPositionArray) : void
+}
+
+class EventChecker <<utility>> {
+    + {static} intruder_detected() : bool
+}
+
+class "HTN Domain «htn_v1»" as HTNDomain <<domain>> {
+    + {static} aller_m(state : State, agent : str, pos : tuple) : list
+    + {static} veille_m(state : State, agent : str) : bool
+    + {static} suivre_m(state : State, agent : str, target : str) : list
+    __actions__
+    + {static} send_mas_cmd(state : State, agent : str, pos : tuple) : State
+}
+
+class "«module» main" as Main <<module>> {
+    - _ros_node         : Node
+    - _last_sent        : dict[str, tuple]
+    - _pose_log         : csv.writer
+    - _waypoint_log     : tuple
+    - DETECTION_RADIUS_DEG : float
+    - MIN_MOVE_DEG      : float
+    - AGENTS            : dict
+    --
+    + main() : void
+    + run_agent(name : str, mission : dict, state : State, node : Node) : void
+    + spawn_vessel(node, vessel, init_pos, model, ...) : void
+    + init_logs() : void
+    - _ts() : str
+    - _wait(fut, timeout) : void
+    - in_zone(center, pos, radius) : bool
+}
+
+' ── Classes externes (ROS2 / GTpyhop / LOTUSim) ──────────────────────────────
+
+class Node <<external>> {
+    + create_subscription(...)
+    + create_client(...)
+    + get_logger()
+}
+
+class MultiThreadedExecutor <<external>> {
+    + add_node(node)
+    + spin()
+    + shutdown()
+}
+
+class ActionClient <<external>> {
+    + wait_for_server()
+    + send_goal_async(goal) : Future
+}
+
+class "gtpyhop.State" as State <<external>> {
+    + agents : dict
+}
+
+class "gtpyhop.Domain" as Domain <<external>> {
+    + _task_method_dict : dict
+    + _action_dict : dict
+}
+
+' ── Relations ─────────────────────────────────────────────────────────────────
+
+' Composition : Main possède le tracker
+Main "1" *-down- "1" PoseTracker : tracker
+
+' Association : Main crée et utilise
+Main "1" o-- "1" Node               : _ros_node
+Main "1" o-- "1" State              : state
+Main ..> MultiThreadedExecutor       : crée
+Main ..> ActionClient                : crée dans\nspawn_vessel()
+Main ..> Domain                      : déclare\nhtn_v1
+Main ..> HTNDomain                   : enregistre\nméthodes & actions
+
+' Dépendances
+EventChecker ..> PoseTracker         : lit positions\n(via tracker global)
+HTNDomain    ..> PoseTracker         : lit positions\n(via tracker global)
+HTNDomain    ..> State               : met à jour\nagents
+PoseTracker  ..> Node                : s'abonne à\n/lotusim/poses
+run_agent    ..> EventChecker        : vérifie événements\n(getattr)
+
+note right of EventChecker
+  Classe utilitaire :
+  pas d'état — toutes les
+  méthodes sont statiques.
+  Lookup par nom via
+  getattr(EventChecker, event_name)
+end note
+
+note right of HTNDomain
+  Domaine GTpyhop enregistré
+  avec declare_task_methods()
+  et declare_actions().
+  find_plan() exécute les
+  actions lors de la planification.
+end note
+
+note bottom of Main
+  run_agent() tourne dans un
+  Thread par agent (daemon).
+  MultiThreadedExecutor tourne
+  dans un Thread séparé (daemon).
+end note
+
+@enduml
