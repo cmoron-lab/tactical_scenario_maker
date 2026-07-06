@@ -6,6 +6,7 @@ Open: http://localhost:5000
 """
 import importlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -22,6 +23,7 @@ import bdd.primitives_actions   # noqa: E402
 
 SCENARIOS_DIR = 'scenarios'
 TEMPLATE_PATH = Path(__file__).parent / 'templates' / 'index.html'
+KB_PATH = Path(__file__).parent / 'bdd' / 'knowledge_base.json'
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -79,21 +81,119 @@ def _str_to_mission(s):
     return tuple(result)
 
 
+def _geo_dist_deg(lat1, lon1, lat2, lon2):
+    return math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2)
+
+
+def _resolve_target_names(agents, pattern):
+    if not pattern:
+        return []
+
+    target = str(pattern).strip()
+    norm = target.strip('_').lower()
+    matched = []
+
+    for name, adata in agents.items():
+        if name == target or target.lower() in name.lower():
+            matched.append(name)
+            continue
+        role = str(adata.get('role', '')).strip().lower()
+        kind = str(adata.get('kind', '')).strip().lower()
+        if role and (role == norm or norm in role):
+            matched.append(name)
+            continue
+        if kind and (kind == norm or norm in kind):
+            matched.append(name)
+
+    if matched:
+        return matched
+
+    marked = [
+        name for name, adata in agents.items()
+        if adata.get('is_intruder') or adata.get('role') == 'intruder' or adata.get('kind') == 'intruder'
+    ]
+    if marked:
+        return marked
+
+    return []
+
+
+def _apply_triggers(triggers, agents, resolve_tokens):
+    """Evaluate event triggers and set agent state variables in-place."""
+    for trig in triggers:
+        condition = trig.get('condition', '')
+        sets_var  = trig.get('sets_variable', '')
+        try:
+            threshold = float(trig.get('threshold', 0))
+        except (TypeError, ValueError):
+            continue
+        if not sets_var:
+            continue
+        # Support both new target_pattern and legacy target_token via resolve_tokens
+        pattern = trig.get('target_pattern') or resolve_tokens.get(trig.get('target_token', ''), '')
+        targets = _resolve_target_names(agents, pattern)
+        for aname, adata in agents.items():
+            if aname in targets:
+                continue
+            pos = adata.get('pos')
+            if not pos:
+                continue
+            triggered = False
+            for tname in targets:
+                tpos = agents[tname].get('pos')
+                if not tpos:
+                    continue
+                dist = _geo_dist_deg(pos['lat'], pos['lon'], tpos['lat'], tpos['lon'])
+                if condition == 'distance_lt' and dist < threshold:
+                    triggered = True; break
+                if condition == 'distance_gt' and dist > threshold:
+                    triggered = True; break
+            adata[sets_var] = triggered
+
+
+def _agent_conditions(agent):
+    """Return conditions dict — prefers new 'conditions' key, falls back to equipement."""
+    if 'conditions' in agent:
+        return agent['conditions']
+    eq = agent.get('equipement', {})
+    cond = {}
+    if 'drone' in eq:
+        cond['drone_available'] = bool(eq['drone'])
+    if 'weather' in eq:
+        cond['weather'] = eq['weather']
+    return cond
+
+
 def _write_scenario(name, form_agents):
     lines = ['AGENTS = {\n']
     for aname, a in form_agents.items():
+        try:
+            x_val = float(a.get('x', 0))
+        except (TypeError, ValueError):
+            x_val = 0.0
+        try:
+            y_val = float(a.get('y', 0))
+        except (TypeError, ValueError):
+            y_val = 0.0
+        base_pos = a.get('base_pos')
+        if isinstance(base_pos, (list, tuple)) and len(base_pos) >= 2:
+            base_lat, base_lon = base_pos[0], base_pos[1]
+        else:
+            base_lat, base_lon = None, None
         vel_min = float(a.get('vel_min', 0))
         vel_max = float(a.get('vel_max', 5))
         ang_vel = float(a.get('ang_vel', 0.05))
         mission = _str_to_mission(a.get('mission', ''))
-        equip   = a.get('equipement', {})
+        cond    = a.get('conditions', {})
         lines.append(f'    {repr(aname)}: {{\n')
-        lines.append(f"        'x': {float(a['x'])},\n")
-        lines.append(f"        'y': {float(a['y'])},\n")
+        lines.append(f"        'x': {x_val},\n")
+        lines.append(f"        'y': {y_val},\n")
         lines.append(f"        'model': {repr(a.get('model', 'wamv'))},\n")
+        if base_lat is not None and base_lon is not None:
+            lines.append(f"        'base_pos': ({base_lat}, {base_lon}),\n")
         lines.append(f"        'linear_velocities_limits': ({vel_min}, {vel_max}),\n")
         lines.append(f"        'angular_velocities_limits': {ang_vel},\n")
-        lines.append(f"        'equipement': {repr(equip)},\n")
+        lines.append(f"        'conditions': {repr(cond)},\n")
         lines.append(f"        'mission': {repr(mission)},\n")
         lines.append('    },\n')
     lines.append('}\n')
@@ -106,18 +206,29 @@ def _compute_plan(name):
     if agents is None:
         return {'error': 'Scénario introuvable'}
 
+    with open(KB_PATH, encoding='utf-8') as f:
+        kb = json.load(f)
+    triggers       = kb.get('event_triggers', [])
+    resolve_tokens = kb.get('resolve_tokens', {})
+
     state = gtpyhop.State('ui_plan_state')
-    state.agents = {
-        aname: {
-            'pos':             {'lat': agent['x'], 'lon': agent['y']},
-            'drone_available': bool(agent.get('equipement', {}).get('drone', False)),
-            'weather':         agent.get('equipement', {}).get('weather'),
-            'available':       True,
-            'intruder_nearby': True,
-            'last_waypoint':   None,
+    state.agents = {}
+    for aname, agent in agents.items():
+        cond = _agent_conditions(agent)
+        agent_state = {
+            'pos':           {'lat': agent['x'], 'lon': agent['y']},
+            'available':     True,
+            'last_waypoint': None,
         }
-        for aname, agent in agents.items()
-    }
+        for k, v in cond.items():
+            if isinstance(v, str) and v.lower() in ('true', 'false'):
+                agent_state[k] = v.lower() == 'true'
+            else:
+                agent_state[k] = v
+        state.agents[aname] = agent_state
+
+    _apply_triggers(triggers, state.agents, resolve_tokens)
+
     state.orders = {}
     state.position_history = {}
 
@@ -148,12 +259,16 @@ def _route(method, path):
             return 'html', {}
         if parts == ['api', 'scenarios']:
             return 'list_scenarios', {}
+        if parts == ['api', 'kb']:
+            return 'get_kb', {}
         if len(parts) == 3 and parts[0] == 'api' and parts[1] == 'scenario' and parts[3:] == []:
             return 'get_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'plan':
             return 'get_plan', {'name': parts[2]}
 
     if method == 'POST':
+        if parts == ['api', 'kb']:
+            return 'save_kb', {}
         if len(parts) == 3 and parts[0] == 'api' and parts[1] == 'scenario' and parts[3:] == []:
             return 'save_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'launch':
@@ -201,6 +316,18 @@ class Handler(BaseHTTPRequestHandler):
         elif action == 'list_scenarios':
             self._send_json(_list_scenarios())
 
+        elif action == 'get_kb':
+            with open(KB_PATH, encoding='utf-8') as f:
+                self._send_json(json.load(f))
+
+        elif action == 'save_kb':
+            kb = self._read_json()
+            with open(KB_PATH, 'w', encoding='utf-8') as f:
+                json.dump(kb, f, indent=2, ensure_ascii=False)
+            # Reload methods in the running domain
+            bdd.tasks_methods.load_kb()
+            self._send_json({'ok': True})
+
         elif action == 'get_scenario':
             agents = _load_agents(params['name'])
             if agents is None:
@@ -215,9 +342,9 @@ class Handler(BaseHTTPRequestHandler):
                     'model':      agent.get('model', 'wamv'),
                     'vel_min':    lim[0],
                     'vel_max':    lim[1],
-                    'ang_vel':    agent.get('angular_velocities_limits', 0.05),
-                    'equipement': agent.get('equipement', {}),
-                    'mission':    _mission_to_str(agent['mission']),
+                    'ang_vel':      agent.get('angular_velocities_limits', 0.05),
+                    'conditions':   _agent_conditions(agent),
+                    'mission':      _mission_to_str(agent['mission']),
                 }
             self._send_json(result)
 

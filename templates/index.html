@@ -57,48 +57,56 @@ header {
 }
 
 .logo-mark {
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   background: #fff;
   border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
-/* Simple "NG" logo mark */
-.logo-mark span {
-  color: var(--navy);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+.logo-mark span { color: var(--navy); font-size: 11px; font-weight: 800; letter-spacing: -0.5px; }
+
+.logo-text { font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+
+.header-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.2); }
+
+.header-app { font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0.2px; }
+
+/* ── Tab navigation ──────────────────────────────────────────────────── */
+.tabs-nav {
+  background: var(--navy);
+  display: flex;
+  padding: 0 28px;
+  border-bottom: 2px solid rgba(0,0,0,0.25);
+  position: sticky;
+  top: 56px;
+  z-index: 99;
 }
 
-.logo-text {
-  font-size: 15px;
+.tab-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  padding: 10px 20px;
+  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
   letter-spacing: 0.3px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.14s;
+  font-family: inherit;
 }
 
-.header-divider {
-  width: 1px;
-  height: 20px;
-  background: rgba(255,255,255,0.2);
-}
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #fff; }
 
-.header-app {
-  font-size: 14px;
-  font-weight: 400;
-  color: rgba(255,255,255,0.7);
-  letter-spacing: 0.2px;
-}
-
-/* ── App layout ──────────────────────────────────────────────────────── */
+/* ── App layout (scenarios tab) ──────────────────────────────────────── */
 .app {
   display: grid;
   grid-template-columns: 260px 1fr;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px - 41px);
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
@@ -120,10 +128,7 @@ header {
   margin-bottom: 10px;
 }
 
-.sc-list {
-  flex: 1;
-  overflow-y: auto;
-}
+.sc-list { flex: 1; overflow-y: auto; }
 
 .sc-item {
   display: flex;
@@ -136,10 +141,7 @@ header {
   transition: background 0.12s, border-color 0.12s;
 }
 .sc-item:hover { background: var(--navy-light); }
-.sc-item.active {
-  background: var(--navy-light);
-  border-color: var(--border-hi);
-}
+.sc-item.active { background: var(--navy-light); border-color: var(--border-hi); }
 
 .sc-name {
   flex: 1;
@@ -158,8 +160,7 @@ header {
   border: none;
   cursor: pointer;
   color: var(--text3);
-  width: 28px;
-  height: 28px;
+  width: 28px; height: 28px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -177,11 +178,7 @@ header {
   border-top: 1px solid var(--border);
 }
 
-.sc-empty {
-  color: var(--text3);
-  font-size: 13px;
-  padding: 8px;
-}
+.sc-empty { color: var(--text3); font-size: 13px; padding: 8px; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn {
@@ -238,16 +235,8 @@ header {
   font-weight: 500;
   margin-top: 16px;
 }
-.launch-status.running {
-  background: #EBF7EE;
-  border: 1px solid #A8D8B0;
-  color: var(--green);
-}
-.launch-status.error {
-  background: #FDECEA;
-  border: 1px solid #F5C6C6;
-  color: var(--red);
-}
+.launch-status.running { background: #EBF7EE; border: 1px solid #A8D8B0; color: var(--green); }
+.launch-status.error   { background: #FDECEA; border: 1px solid #F5C6C6; color: var(--red); }
 
 .btn-ghost {
   background: transparent;
@@ -256,11 +245,8 @@ header {
 }
 .btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border-hi); }
 
-/* ── Editor ──────────────────────────────────────────────────────────── */
-.editor {
-  padding: 28px 32px;
-  overflow-y: auto;
-}
+/* ── Editor (scenario) ───────────────────────────────────────────────── */
+.editor { padding: 28px 32px; overflow-y: auto; }
 
 .editor-empty {
   display: flex;
@@ -275,7 +261,6 @@ header {
 .editor-empty .icon { font-size: 36px; opacity: 0.4; }
 .editor-empty p { font-size: 15px; }
 
-/* Scenario name row */
 .scenario-bar {
   display: flex;
   align-items: center;
@@ -311,7 +296,6 @@ header {
   letter-spacing: 0.2px;
 }
 
-/* ── Agent card ──────────────────────────────────────────────────────── */
 .agent-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -329,13 +313,7 @@ header {
   gap: 12px;
 }
 
-.agent-name-display {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.2px;
-}
+.agent-name-display { flex: 1; font-size: 15px; font-weight: 600; color: #fff; letter-spacing: 0.2px; }
 
 .agent-type-chip {
   font-size: 11px;
@@ -359,7 +337,6 @@ header {
 }
 .agent-remove:hover { color: #fff; background: rgba(200,0,42,0.4); }
 
-/* ── Form grid ───────────────────────────────────────────────────────── */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -377,8 +354,7 @@ header {
   letter-spacing: 0.2px;
 }
 
-.field input,
-.field select {
+.field input, .field select {
   background: var(--bg);
   border: 1.5px solid var(--border);
   color: var(--text);
@@ -389,15 +365,13 @@ header {
   width: 100%;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.field input:focus,
-.field select:focus {
+.field input:focus, .field select:focus {
   outline: none;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
 }
 .field select option { background: #fff; }
 
-/* ── Mission row ─────────────────────────────────────────────────────── */
 .mission-row {
   display: flex;
   gap: 10px;
@@ -417,11 +391,7 @@ header {
   min-width: 160px;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.task-select:focus {
-  outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
-}
+.task-select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,87,184,0.10); }
 .task-select option { background: #fff; }
 
 .mission-extra {
@@ -431,8 +401,7 @@ header {
   gap: 8px;
   flex-wrap: wrap;
 }
-.mission-extra input,
-.mission-extra select {
+.mission-extra input, .mission-extra select {
   background: var(--bg);
   border: 1.5px solid var(--border);
   color: var(--text);
@@ -444,15 +413,13 @@ header {
   min-width: 0;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.mission-extra input:focus,
-.mission-extra select:focus {
+.mission-extra input:focus, .mission-extra select:focus {
   outline: none;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
 }
 .mission-extra select option { background: #fff; }
 
-/* ── Action bar ──────────────────────────────────────────────────────── */
 .action-bar {
   display: flex;
   gap: 10px;
@@ -462,7 +429,6 @@ header {
   flex-wrap: wrap;
 }
 
-/* ── Plan section ────────────────────────────────────────────────────── */
 .plan-section {
   margin-top: 24px;
   background: var(--surface);
@@ -480,17 +446,8 @@ header {
   justify-content: space-between;
 }
 
-.plan-head-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.9);
-  letter-spacing: 0.3px;
-}
-
-.plan-head-sub {
-  font-size: 11px;
-  color: rgba(255,255,255,0.45);
-}
+.plan-head-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 0.3px; }
+.plan-head-sub   { font-size: 11px; color: rgba(255,255,255,0.45); }
 
 .plan-body { padding: 6px 0; }
 
@@ -504,12 +461,7 @@ header {
 }
 .plan-row:last-child { border-bottom: none; }
 
-.plan-agent {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--navy);
-  padding-top: 2px;
-}
+.plan-agent { font-size: 13px; font-weight: 700; color: var(--navy); padding-top: 2px; }
 
 .plan-val {
   font-family: 'Courier New', monospace;
@@ -522,21 +474,591 @@ header {
   word-break: break-all;
   line-height: 1.6;
 }
-
-.plan-val.empty { color: var(--text2); background: var(--bg); border-color: var(--border); font-style: italic; }
+.plan-val.empty   { color: var(--text2); background: var(--bg); border-color: var(--border); font-style: italic; }
 .plan-val.waiting { color: #7A5A00; background: #FFFBEE; border-color: #F0D980; font-style: italic; }
+
+/* ── KB Editor ───────────────────────────────────────────────────────── */
+#tab-kb {
+  padding: 28px 32px;
+  overflow-y: auto;
+  max-height: calc(100vh - 56px - 41px);
+}
+
+.kb-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.kb-page-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 28px;
+}
+
+.kb-section { margin-bottom: 32px; }
+
+.kb-section-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.kb-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+
+.locked-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: var(--bg);
+  color: var(--text3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.kb-locked-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.kb-locked-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  opacity: 0.65;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kb-locked-item code { font-family: 'Courier New', monospace; font-size: 12px; color: var(--navy); font-weight: 700; }
+.kb-locked-item span { font-size: 12px; color: var(--text2); }
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+}
+
+.range-row label { font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; min-width: 210px; }
+
+.range-row input[type="range"] { flex: 1; accent-color: var(--blue); cursor: pointer; }
+
+.range-row input[type="number"] {
+  width: 90px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+  text-align: right;
+}
+.range-row input[type="number"]:focus { outline: none; border-color: var(--blue); }
+
+/* Task accordion */
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.task-head {
+  display: flex;
+  align-items: center;
+  padding: 11px 16px;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+.task-head:hover { background: var(--navy-light); }
+.task-head.open  { background: var(--navy); }
+
+.task-arrow {
+  font-size: 11px;
+  color: var(--text3);
+  transition: transform 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.task-head.open .task-arrow { color: rgba(255,255,255,0.6); transform: rotate(90deg); }
+
+.task-key {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--navy-light);
+  color: var(--navy);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.task-head.open .task-key { background: rgba(255,255,255,0.15); color: #fff; }
+
+.task-label-inp {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: border-color 0.12s, background 0.12s;
+  cursor: text;
+}
+.task-head.open .task-label-inp { color: rgba(255,255,255,0.9); }
+.task-label-inp:focus { outline: none; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); }
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.task-head:not(.open) .task-del { color: var(--text3); }
+.task-head:not(.open) .task-del:hover { background: #FDECEA; color: var(--red); }
+.task-head.open .task-del { color: rgba(255,255,255,0.4); }
+.task-head.open .task-del:hover { background: rgba(200,0,42,0.4); color: #fff; }
+
+.task-body {
+  display: none;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.task-body.open { display: block; }
+
+/* Method card */
+.method-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.method-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--navy-light);
+  border-bottom: 1px solid var(--border);
+}
+
+.method-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--blue);
+  padding: 1px 6px;
+  border: 1px solid var(--border-hi);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.method-name-inp {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  min-width: 0;
+}
+.method-name-inp:focus { outline: none; }
+.method-name-inp::placeholder { color: var(--text3); font-weight: 400; }
+
+.move-btn {
+  background: none; border: none; cursor: pointer;
+  width: 24px; height: 24px;
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text2); flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.move-btn:hover { background: var(--border); color: var(--text); }
+
+.del-btn {
+  background: none; border: none; cursor: pointer;
+  width: 24px; height: 24px;
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--text3); flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.del-btn:hover { background: #FDECEA; color: var(--red); }
+
+.method-body {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 800px) { .method-body { grid-template-columns: 1fr; } }
+
+.method-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+/* Precondition row */
+.precond-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.prec-type-sel {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-type-sel:focus { outline: none; border-color: var(--blue); }
+
+.prec-val-inp {
+  width: 110px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-val-inp:focus { outline: none; border-color: var(--blue); }
+
+/* Subtask row */
+.subtask-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.subtask-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.subtask-task-sel {
+  flex: 1;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.subtask-task-sel:focus { outline: none; border-color: var(--blue); }
+
+.subtask-args-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.args-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-right: 2px;
+}
+
+.arg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--navy-light);
+  border: 1px solid var(--border-hi);
+  border-radius: 4px;
+  padding: 2px 4px 2px 6px;
+}
+
+.arg-sel {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+  max-width: 140px;
+}
+.arg-sel:focus { outline: none; }
+
+.arg-custom-inp {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 5px;
+  width: 90px;
+  font-family: inherit;
+}
+.arg-custom-inp:focus { outline: none; border-color: var(--blue); }
+
+.arg-del {
+  background: none; border: none;
+  color: var(--text3); cursor: pointer;
+  font-size: 12px; padding: 0 2px; line-height: 1;
+}
+.arg-del:hover { color: var(--red); }
+
+/* Mini button */
+.mini-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  color: var(--text2);
+  padding: 4px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: border-color 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+.mini-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── Conditions initiales (scenario editor) ─────────────────────────── */
+.cond-section {
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.cond-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text2);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.cond-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cond-row:last-child { margin-bottom: 0; }
+
+.cond-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.cond-sel {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+  width: 100px;
+  flex-shrink: 0;
+}
+.cond-sel:focus { outline: none; border-color: var(--blue); }
+
+.cond-inp {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+  width: 140px;
+  flex-shrink: 0;
+}
+.cond-inp:focus { outline: none; border-color: var(--blue); }
+
+.cond-empty {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* ── Events list ─────────────────────────────────────────────────────── */
+.events-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.event-key-inp {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--navy);
+  font-weight: 600;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 4px;
+  flex: 1;
+}
+.event-key-inp:focus { outline: none; border-color: var(--blue); }
+.event-key-inp::placeholder { font-weight: 400; color: var(--text3); font-family: inherit; }
+
+.event-eq { font-size: 14px; font-weight: 700; color: var(--text2); flex-shrink: 0; padding: 0 2px; }
+
+.event-val-inp {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 4px;
+  width: 130px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.event-val-inp:focus { outline: none; border-color: var(--blue); }
+
+.events-hint { font-size: 12px; color: var(--text2); margin-top: 10px; line-height: 1.6; }
+.events-hint code {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  background: var(--navy-light);
+  color: var(--navy);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ── Trigger rows ─────────────────────────────────────────────────────── */
+.trigger-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.trigger-row-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.trigger-label-inp {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: var(--navy);
+}
+.trigger-label-inp:focus { outline: none; border-color: var(--blue); }
+.trigger-formula {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text2);
+}
+.trigger-formula > span { white-space: nowrap; }
+.trigger-token-inp, .trigger-thresh-inp, .trigger-sets-inp {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--navy);
+}
+.trigger-token-inp:focus, .trigger-thresh-inp:focus, .trigger-sets-inp:focus { outline: none; border-color: var(--blue); }
+.trigger-token-inp { width: 110px; }
+.trigger-thresh-inp { width: 140px; }
+.trigger-sets-inp   { width: 140px; }
+.trigger-cond-sel {
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--text);
+  width: 52px;
+}
+.trigger-cond-sel:focus { outline: none; border-color: var(--blue); }
 
 /* ── Toast ───────────────────────────────────────────────────────────── */
 #toast {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 24px; right: 24px;
   background: var(--navy);
   color: #fff;
   padding: 12px 20px;
   border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 13px; font-weight: 500;
   box-shadow: var(--shadow-md);
   opacity: 0;
   transform: translateY(6px);
@@ -559,47 +1081,150 @@ header {
   <span class="header-app">Tactical Scenario Maker</span>
 </header>
 
-<div class="app">
+<nav class="tabs-nav">
+  <button class="tab-btn active" data-tab="scenarios" onclick="switchTab('scenarios')">Scénarios</button>
+  <button class="tab-btn"        data-tab="kb"        onclick="switchTab('kb')">Connaissances HTN</button>
+</nav>
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-title">Scénarios</div>
-    <div class="sc-list" id="sc-list">
-      <div class="sc-empty">Chargement…</div>
+<!-- ── Tab: Scénarios ─────────────────────────────────────────────────── -->
+<div id="tab-scenarios">
+  <div class="app">
+
+    <div class="sidebar">
+      <div class="sidebar-title">Scénarios</div>
+      <div class="sc-list" id="sc-list">
+        <div class="sc-empty">Chargement…</div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn btn-outline btn-full" onclick="newScenario()">+ Nouveau scénario</button>
+      </div>
     </div>
-    <div class="sidebar-footer">
-      <button class="btn btn-outline btn-full" onclick="newScenario()">
-        + Nouveau scénario
-      </button>
+
+    <div class="editor" id="editor">
+      <div class="editor-empty">
+        <div class="icon">⚓</div>
+        <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
+      </div>
     </div>
+
+  </div>
+</div>
+
+<!-- ── Tab: Connaissances HTN ─────────────────────────────────────────── -->
+<div id="tab-kb" style="display:none">
+
+  <div class="kb-section" style="border-bottom:1px solid var(--border);padding:20px 32px 16px;background:var(--surface)">
+    <div class="kb-page-title">Base de connaissances HTN</div>
+    <div class="kb-page-sub">Définissez ici les tâches, les méthodes et leurs préconditions. Les actions primitives sont gérées par le code Python et ne peuvent pas être modifiées ici.</div>
   </div>
 
-  <!-- Editor -->
-  <div class="editor" id="editor">
-    <div class="editor-empty">
-      <div class="icon">⚓</div>
-      <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
-    </div>
-  </div>
+  <div style="padding:28px 32px;overflow-y:auto;max-height:calc(100vh - 56px - 41px - 88px)">
 
+    <!-- ROS Sources -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">Topics ROS disponibles</div>
+        <button class="btn btn-outline" onclick="addRosSource()" style="font-size:12px;padding:6px 14px">+ Ajouter</button>
+      </div>
+      <div id="kb-ros-sources" class="events-list"></div>
+      <p class="events-hint">
+        Topics ROS publiés par Lotusim que les déclencheurs peuvent utiliser.<br>
+        <code>{agent}</code> est remplacé dynamiquement par le nom de chaque agent au runtime.<br>
+        Ex&nbsp;: <code>/lotusim/{agent}/pose</code> publie la position GPS en temps réel.
+      </p>
+    </div>
+
+    <!-- Event triggers -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">Déclencheurs d'événements</div>
+        <button class="btn btn-outline" onclick="addTrigger()" style="font-size:12px;padding:6px 14px">+ Ajouter</button>
+      </div>
+      <div id="kb-triggers" class="events-list"></div>
+      <p class="events-hint">
+        Chaque déclencheur calcule une <strong>variable d'état</strong> à partir de données ROS temps réel.<br>
+        La condition est réévaluée à chaque cycle de réplanification. Quand elle devient vraie, la méthode HTN correspondante s'active.<br>
+        Ex&nbsp;: dist(agent, <code>__intruder__</code>) &lt; 0.003° → <code>intruder_nearby</code> = vrai → active <em>Surveiller et réagir</em>.
+      </p>
+    </div>
+
+    <!-- Tasks -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">Tâches HTN</div>
+        <button class="btn btn-outline" onclick="addTask()" style="font-size:12px;padding:6px 14px">+ Nouvelle tâche</button>
+      </div>
+      <div id="kb-tasks"></div>
+    </div>
+
+    <!-- Leaf tasks (locked) -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">
+          Tâches feuilles
+          <span class="locked-badge">Verrouillées — code Python</span>
+        </div>
+      </div>
+      <div id="kb-leaf" class="kb-locked-grid"></div>
+    </div>
+
+    <div class="action-bar" style="border-top:1px solid var(--border);padding-top:20px;margin-top:0">
+      <button class="btn btn-primary" onclick="saveKB()">Sauvegarder la base de connaissances</button>
+    </div>
+
+  </div>
 </div>
 
 <div id="toast"></div>
 
 <script>
-// ── Task catalogue (from bdd/tasks_methods.py) ────────────────────────────────
-const TASKS = {
-  'veille':              { label: 'Veille',                extra: 'none'   },
-  'standby':             { label: 'Standby',               extra: 'none'   },
-  'deployer_drone':      { label: 'Déployer drone',        extra: 'none'   },
-  'aller':               { label: 'Aller à position',      extra: 'pos'    },
-  'suivre':              { label: 'Suivre un agent',       extra: 'target' },
-  'deployer_drone_vers': { label: 'Déployer drone vers',   extra: 'target' },
-  'maintenir_contact':   { label: 'Maintenir contact',     extra: 'target' },
-};
+// ── Task catalogue (scenario editor) ─────────────────────────────────────────
+let TASKS = {};
+
+function inferTaskExtra(task, label = '') {
+  const key = String(task || '').toLowerCase();
+  const txt = String(label || '').toLowerCase();
+  if (key === 'aller' || key === 'aller_a' || key === 'aller_a_agent' || txt.includes('position')) return 'pos';
+  if (['suivre', 'maintenir_contact', 'deployer_drone_vers', 'deployer_drone'].includes(key) || txt.includes('agent')) return 'target';
+  return 'none';
+}
+
+function refreshTaskCatalog(kb = kbData) {
+  const catalog = {};
+  Object.entries(kb?.tasks || {}).forEach(([k, def]) => {
+    catalog[k] = { label: def?.label || k, extra: inferTaskExtra(k, def?.label || k) };
+  });
+  Object.entries(kb?.leaf_tasks || {}).forEach(([k, label]) => {
+    if (!catalog[k]) {
+      catalog[k] = { label: label || k, extra: inferTaskExtra(k, label || k) };
+    }
+  });
+  TASKS = catalog;
+  return TASKS;
+}
+
+function getTaskMeta(task) {
+  if (!task) return { label: '', extra: 'none' };
+  if (TASKS[task]) return TASKS[task];
+  const fallback = kbData?.tasks?.[task]?.label || kbData?.leaf_tasks?.[task] || task;
+  return { label: fallback || task, extra: inferTaskExtra(task, fallback || task) };
+}
 
 let current = null;
 loadList();
+// KB is needed for condition fields in the scenario editor — load early
+fetch('/api/kb').then(r => r.json()).then(kb => { kbData = kb; refreshTaskCatalog(kb); });
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-scenarios').style.display = tab === 'scenarios' ? '' : 'none';
+  document.getElementById('tab-kb').style.display        = tab === 'kb'        ? '' : 'none';
+  if (tab === 'kb') {
+    if (kbData) renderKB(kbData);  // already loaded silently — just render
+    else        loadKB();           // first open — fetch then render
+  }
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function loadList() {
@@ -632,7 +1257,7 @@ function newScenario() {
   loadList();
 }
 
-// ── Editor ────────────────────────────────────────────────────────────────────
+// ── Scenario editor ───────────────────────────────────────────────────────────
 function renderEditor(name, agents, isNew) {
   document.getElementById('editor').innerHTML = `
     <div class="scenario-bar">
@@ -663,14 +1288,13 @@ function renderEditor(name, agents, isNew) {
   }
 }
 
-// ── Agent card ────────────────────────────────────────────────────────────────
 function buildCard(name, a = {}) {
   const div = document.createElement('div');
   div.className = 'agent-card';
   div.id = `ac-${name}`;
 
-  const equip = JSON.stringify(a.equipement || {});
   const parsed = parseMission(a.mission || '');
+  const initConds = a.conditions || {};
 
   div.innerHTML = `
     <div class="agent-head">
@@ -690,33 +1314,41 @@ function buildCard(name, a = {}) {
           oninput="warnCoord(this, 103.0, 104.0)">
       </div>
       <div class="field">
+        <label>Rôle</label>
+        <input name="role" value="${a.role ?? 'patrol'}" placeholder="patrol, intruder, base, ...">
+      </div>
+      <div class="field">
         <label>Modèle</label>
         <input name="model" value="${a.model ?? 'wamv'}">
+      </div>
+      <div class="field">
+        <label>Position de base (lat, lon)</label>
+        <input name="base_pos" value="${a.base_pos ?? ''}" placeholder="1.2605 103.7516">
       </div>
       <div class="field">
         <label>Vitesse linéaire [min max]</label>
         <input name="vel" value="${a.vel_min ?? 0} ${a.vel_max ?? 5}">
       </div>
       <div class="field fw">
-        <label>Équipement (JSON)</label>
-        <input name="equipement" value='${equip}' placeholder='{"drone": true}'>
-      </div>
-      <div class="field fw">
         <label>Mission</label>
         <div class="mission-row">
           <select name="task" class="task-select"
             onchange="updateExtra('${name}', this.value)">
-            ${Object.entries(TASKS).map(([k, t]) =>
+            ${Object.entries(refreshTaskCatalog()).map(([k, t]) =>
               `<option value="${k}" ${k === parsed.task ? 'selected' : ''}>${t.label}</option>`
             ).join('')}
           </select>
           <div class="mission-extra" id="mex-${name}"></div>
         </div>
       </div>
+      <div class="fw" id="cond-${name}"></div>
     </div>
   `;
 
-  setTimeout(() => updateExtra(name, parsed.task, parsed.extra), 0);
+  setTimeout(() => {
+    updateExtra(name, parsed.task, parsed.extra);
+    updateConditions(name, parsed.task, initConds);
+  }, 0);
   return div;
 }
 
@@ -728,7 +1360,7 @@ function parseMission(str) {
 function updateExtra(agentName, task, init = []) {
   const el = document.getElementById(`mex-${agentName}`);
   if (!el) return;
-  const type = TASKS[task]?.extra || 'none';
+  const type = getTaskMeta(task).extra || 'none';
 
   if (type === 'none') {
     el.innerHTML = '';
@@ -751,6 +1383,9 @@ function updateExtra(agentName, task, init = []) {
       </select>
     `;
   }
+
+  // When task changes via dropdown (not on init), reset conditions
+  if (init.length === 0) updateConditions(agentName, task, {});
 }
 
 function addAgent() {
@@ -763,18 +1398,15 @@ function removeCard(name) {
   document.getElementById(`ac-${name}`)?.remove();
 }
 
-// ── Collect ───────────────────────────────────────────────────────────────────
 function collectAgents() {
   const data = {};
   document.querySelectorAll('.form-grid').forEach(div => {
     const aname = div.dataset.agent;
     const g = n => div.querySelector(`[name="${n}"]`)?.value?.trim() ?? '';
     const [vm, vM] = g('vel').split(/\s+/).map(Number);
-    let equip = {};
-    try { equip = JSON.parse(g('equipement') || '{}'); } catch (_) {}
 
     const task = g('task');
-    const type = TASKS[task]?.extra ?? 'none';
+    const type = getTaskMeta(task).extra ?? 'none';
     let mission = `${task} ${aname}`;
     if (type === 'pos') {
       const lat = g('mission_lat'), lon = g('mission_lon');
@@ -784,18 +1416,23 @@ function collectAgents() {
       if (t) mission += ` ${t}`;
     }
 
+    const basePosRaw = g('base_pos');
+    const basePos = basePosRaw ? basePosRaw.trim().split(/\s+/).filter(Boolean) : [];
     data[aname] = {
-      x: parseFloat(g('x')),   y: parseFloat(g('y')),
+      x: parseFloat(g('x')) || 0,
+      y: parseFloat(g('y')) || 0,
       model: g('model') || 'wamv',
-      vel_min: isNaN(vm) ? 0 : vm,  vel_max: isNaN(vM) ? 5 : vM,
+      base_pos: basePos.length >= 2 ? [parseFloat(basePos[0]), parseFloat(basePos[1])] : null,
+      vel_min: isNaN(vm) ? 0 : vm,
+      vel_max: isNaN(vM) ? 5 : vM,
       ang_vel: 0.05,
-      equipement: equip,  mission,
+      conditions: collectConditions(div),
+      mission,
     };
   });
   return data;
 }
 
-// ── Actions ───────────────────────────────────────────────────────────────────
 function saveScenario() {
   const inp = document.getElementById('sc-name-inp');
   const name = inp?.value?.trim();
@@ -809,7 +1446,6 @@ function saveScenario() {
     const wasNew = !current;
     current = scName;
     if (wasNew) {
-      // Re-render pour afficher le bouton Lancer
       fetch(`/api/scenario/${scName}`).then(r => r.json()).then(agents => {
         renderEditor(scName, agents, false);
         loadList();
@@ -846,18 +1482,14 @@ function launchScenario(name) {
   fetch(`/api/scenario/${name}/launch`, { method: 'POST' })
     .then(r => r.json())
     .then(d => {
-      if (statusEl) {
-        statusEl.innerHTML = `
-          <div class="launch-status running">
-            ● main.py lancé — scénario : <strong>${name}</strong> · PID ${d.pid}
-          </div>`;
-      }
+      if (statusEl) statusEl.innerHTML = `
+        <div class="launch-status running">
+          ● main.py lancé — scénario : <strong>${name}</strong> · PID ${d.pid}
+        </div>`;
       if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
     })
     .catch(() => {
-      if (statusEl) {
-        statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
-      }
+      if (statusEl) statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
       if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
     });
 }
@@ -872,8 +1504,8 @@ function computePlan() {
     sec.style.display = 'block';
     body.innerHTML = Object.entries(plans).map(([agent, plan]) => {
       let cls = 'plan-val';
-      if (plan.startsWith('[]'))     cls += ' empty';
-      if (plan.startsWith('Aucun'))  cls += ' waiting';
+      if (plan.startsWith('[]'))    cls += ' empty';
+      if (plan.startsWith('Aucun')) cls += ' waiting';
       return `
         <div class="plan-row">
           <div class="plan-agent">${agent}</div>
@@ -884,7 +1516,774 @@ function computePlan() {
   });
 }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
+// ── Conditions initiales (scenario editor) ────────────────────────────────────
+
+// Collect all unique variable names from preconditions (recursive through subtasks).
+function getTaskCondVars(taskName, visited = new Set()) {
+  if (visited.has(taskName) || !kbData) return new Map();
+  visited.add(taskName);
+  const task = kbData.tasks?.[taskName];
+  if (!task) return new Map();
+  // Map: variable → first concrete value seen (to guess bool vs text)
+  const vars = new Map();
+  for (const method of task.methods) {
+    for (const c of method.preconditions) {
+      const varName = c.variable || '';
+      if (varName && !vars.has(varName)) {
+        vars.set(varName, c.value ?? '');
+      }
+    }
+    for (const st of method.subtasks) {
+      for (const [k, v] of getTaskCondVars(st.task, visited)) {
+        if (!vars.has(k)) vars.set(k, v);
+      }
+    }
+  }
+  return vars;
+}
+
+function updateConditions(agentName, taskName, initConds = {}) {
+  const el = document.getElementById(`cond-${agentName}`);
+  if (!el) return;
+
+  const vars = getTaskCondVars(taskName);
+  if (!vars.size) { el.innerHTML = ''; return; }
+
+  const rows = [];
+  for (const [varName, sampleVal] of vars) {
+    const isBool = String(sampleVal).toLowerCase() === 'true' || String(sampleVal).toLowerCase() === 'false';
+    const cur = varName in initConds ? initConds[varName] : sampleVal;
+    const curStr = String(cur ?? sampleVal);
+    const isCurTrue = curStr.toLowerCase() !== 'false' && curStr !== '' && curStr !== '0';
+    const label = varName.replace(/_/g, ' ');
+
+    if (isBool) {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <select name="cond_${escHtml(varName)}" class="cond-sel">
+            <option value="true"  ${isCurTrue  ? 'selected' : ''}>Oui</option>
+            <option value="false" ${!isCurTrue ? 'selected' : ''}>Non</option>
+          </select>
+        </div>`);
+    } else {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <input name="cond_${escHtml(varName)}" class="cond-inp"
+            placeholder="valeur" value="${escHtml(curStr)}">
+        </div>`);
+    }
+  }
+
+  el.innerHTML = `
+    <div class="cond-section">
+      <span class="cond-section-title">Conditions initiales</span>
+      ${rows.join('')}
+    </div>`;
+}
+
+function collectConditions(div) {
+  const cond = {};
+  div.querySelectorAll('[name^="cond_"]').forEach(inp => {
+    const key = inp.name.slice(5); // strip 'cond_'
+    if (inp.tagName === 'SELECT') {
+      cond[key] = inp.value === 'true';
+    } else if (inp.value.trim()) {
+      cond[key] = inp.value.trim();
+    }
+  });
+  return cond;
+}
+
+// ── KB Editor ─────────────────────────────────────────────────────────────────
+let kbData = null;
+
+// ── Events (generic key/value variables) ──────────────────────────────────────
+function renderEvents(events) {
+  const el = document.getElementById('kb-events');
+  el.innerHTML = '';
+  for (const [k, v] of Object.entries(events)) {
+    el.appendChild(buildEventRow(k, v));
+  }
+}
+
+function buildEventRow(key, val) {
+  const row = document.createElement('div');
+  row.className = 'event-row';
+
+  const keyInp = document.createElement('input');
+  keyInp.className = 'event-key-inp';
+  keyInp.value = key;
+  keyInp.placeholder = 'nom_variable';
+
+  const eq = document.createElement('span');
+  eq.className = 'event-eq';
+  eq.textContent = '=';
+
+  const valInp = document.createElement('input');
+  valInp.className = 'event-val-inp';
+  valInp.type = 'number';
+  valInp.step = 'any';
+  valInp.value = val;
+  valInp.placeholder = '0';
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.textContent = '×';
+  del.onclick = () => row.remove();
+
+  row.append(keyInp, eq, valInp, del);
+  return row;
+}
+
+function addEventVar() {
+  document.getElementById('kb-events').appendChild(buildEventRow('', 0));
+  // Focus the key input of the new row
+  const rows = document.querySelectorAll('#kb-events .event-row');
+  rows[rows.length - 1].querySelector('.event-key-inp').focus();
+}
+
+function collectEvents() {
+  const events = {};
+  document.querySelectorAll('#kb-events .event-row').forEach(row => {
+    const key = row.querySelector('.event-key-inp').value.trim();
+    const raw = row.querySelector('.event-val-inp').value;
+    const val = parseFloat(raw);
+    if (key) events[key] = isNaN(val) ? 0 : val;
+  });
+  return events;
+}
+
+// ── Resolve tokens ────────────────────────────────────────────────────────────
+function renderTokens(tokens) {
+  const el = document.getElementById('kb-tokens');
+  el.innerHTML = '';
+  for (const [k, v] of Object.entries(tokens || {})) {
+    el.appendChild(buildTokenRow(k, v));
+  }
+}
+
+function buildTokenRow(token, pattern) {
+  const row = document.createElement('div');
+  row.className = 'event-row';
+
+  const tokInp = document.createElement('input');
+  tokInp.className = 'event-key-inp';
+  tokInp.value = token;
+  tokInp.placeholder = '__mon_jeton__';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'event-eq';
+  arrow.textContent = '→ motif';
+
+  const patInp = document.createElement('input');
+  patInp.className = 'event-val-inp';
+  patInp.type = 'text';
+  patInp.style.textAlign = 'left';
+  patInp.value = pattern;
+  patInp.placeholder = 'ex: intru';
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.textContent = '×';
+  del.onclick = () => row.remove();
+
+  row.append(tokInp, arrow, patInp, del);
+  return row;
+}
+
+function addToken() {
+  const el = document.getElementById('kb-tokens');
+  el.appendChild(buildTokenRow('__', ''));
+  el.lastElementChild.querySelector('.event-key-inp').focus();
+}
+
+function collectTokens() {
+  const tokens = {};
+  document.querySelectorAll('#kb-tokens .event-row').forEach(row => {
+    const tok = row.querySelector('.event-key-inp').value.trim();
+    const pat = row.querySelectorAll('.event-val-inp')[0].value.trim();
+    if (tok && pat) tokens[tok] = pat;
+  });
+  return tokens;
+}
+
+// ── ROS Sources ────────────────────────────────────────────────────────────────
+function renderRosSources(sources) {
+  const el = document.getElementById('kb-ros-sources');
+  el.innerHTML = '';
+  (sources || []).forEach(s => el.appendChild(buildRosSourceRow(s)));
+}
+
+function buildRosSourceRow(src) {
+  const row = document.createElement('div');
+  row.className = 'event-row';
+
+  const topicInp = document.createElement('input');
+  topicInp.className = 'event-key-inp';
+  topicInp.style.fontFamily = 'Courier New, monospace';
+  topicInp.value = src.topic || '';
+  topicInp.placeholder = '/lotusim/{agent}/pose';
+
+  const descInp = document.createElement('input');
+  descInp.className = 'event-val-inp';
+  descInp.type = 'text';
+  descInp.style.textAlign = 'left';
+  descInp.style.width = '220px';
+  descInp.value = src.description || '';
+  descInp.placeholder = 'description';
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.textContent = '×';
+  del.onclick = () => row.remove();
+
+  row.append(topicInp, descInp, del);
+  return row;
+}
+
+function addRosSource() {
+  const el = document.getElementById('kb-ros-sources');
+  el.appendChild(buildRosSourceRow({ topic: '', description: '' }));
+  el.lastElementChild.querySelector('.event-key-inp').focus();
+}
+
+function collectRosSources() {
+  const sources = [];
+  document.querySelectorAll('#kb-ros-sources .event-row').forEach(row => {
+    const topic = row.querySelector('.event-key-inp').value.trim();
+    const desc  = row.querySelectorAll('input')[1].value.trim();
+    if (topic) sources.push({ topic, description: desc });
+  });
+  return sources;
+}
+
+function _rosTopicOptions(selected) {
+  const sources = kbData?.ros_sources || [];
+  return sources.map(s =>
+    `<option value="${escHtml(s.topic)}" ${s.topic === selected ? 'selected' : ''}>${escHtml(s.topic)}</option>`
+  ).join('');
+}
+
+// ── Event triggers ────────────────────────────────────────────────────────────
+function renderTriggers(triggers) {
+  const el = document.getElementById('kb-triggers');
+  el.innerHTML = '';
+  (triggers || []).forEach(t => el.appendChild(buildTriggerRow(t)));
+}
+
+function _tokenFromRole(role) {
+  return `__${role.trim()}__`;
+}
+
+function buildTriggerRow(trig) {
+  const row = document.createElement('div');
+  row.className = 'trigger-row';
+
+  // Header: label + delete
+  const hd = document.createElement('div');
+  hd.className = 'trigger-row-hd';
+
+  const labelInp = document.createElement('input');
+  labelInp.className = 'trigger-label-inp';
+  labelInp.value = trig.label || '';
+  labelInp.placeholder = 'Nom du déclencheur';
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.textContent = '×';
+  del.onclick = () => row.remove();
+  hd.append(labelInp, del);
+
+  const formula = document.createElement('div');
+  formula.className = 'trigger-formula';
+
+  const f1 = document.createElement('span');
+  f1.textContent = 'si dist(agent,';
+
+  const patternInp = document.createElement('input');
+  patternInp.className = 'trigger-token-inp';
+  patternInp.dataset.role = 'target-pattern';
+  patternInp.style.width = '140px';
+  patternInp.type = 'text';
+  patternInp.value = trig.target_pattern || trig.target_role || '';
+  patternInp.placeholder = '__token__';
+
+  const paren = document.createElement('span');
+  paren.textContent = ')';
+
+  const condSel = document.createElement('select');
+  condSel.className = 'trigger-cond-sel';
+  condSel.dataset.role = 'condition';
+  [{ value: 'distance_lt', label: '<' }, { value: 'distance_gt', label: '>' }].forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value; opt.textContent = o.label;
+    if (trig.condition === o.value) opt.selected = true;
+    condSel.appendChild(opt);
+  });
+
+  const threshInp = document.createElement('input');
+  threshInp.className = 'trigger-thresh-inp';
+  threshInp.dataset.role = 'threshold';
+  threshInp.type = 'number';
+  threshInp.step = 'any';
+  threshInp.value = trig.threshold ?? 0.003;
+  threshInp.placeholder = '0.003';
+
+  const arrowSp = document.createElement('span');
+  arrowSp.textContent = '→';
+
+  const setsInp = document.createElement('input');
+  setsInp.className = 'trigger-sets-inp';
+  setsInp.dataset.role = 'sets-variable';
+  setsInp.value = trig.sets_variable || '';
+  setsInp.placeholder = 'variable_état';
+
+  const suffix = document.createElement('span');
+  suffix.textContent = '= vrai';
+
+  formula.append(f1, patternInp, paren, condSel, threshInp, arrowSp, setsInp, suffix);
+
+  // Source ROS line
+  const sourceLine = document.createElement('div');
+  sourceLine.className = 'trigger-formula';
+  sourceLine.style.marginTop = '4px';
+
+  const sourceLabel = document.createElement('span');
+  sourceLabel.textContent = 'données ROS :';
+  sourceLabel.style.color = 'var(--text3)';
+
+  const sources = kbData?.ros_sources || [];
+  let sourceEl;
+  if (sources.length) {
+    sourceEl = document.createElement('select');
+    sourceEl.className = 'trigger-cond-sel';
+    sourceEl.style.cssText = 'width:240px;font-family:Courier New,monospace;font-size:11px';
+    sources.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.topic; opt.textContent = s.topic;
+      if ((trig.source_topic || '') === s.topic) opt.selected = true;
+      sourceEl.appendChild(opt);
+    });
+  } else {
+    sourceEl = document.createElement('input');
+    sourceEl.className = 'trigger-thresh-inp';
+    sourceEl.style.cssText = 'width:240px;font-family:Courier New,monospace;font-size:11px';
+    sourceEl.value = trig.source_topic || '';
+    sourceEl.placeholder = '/lotusim/{agent}/pose';
+  }
+  sourceEl.dataset.role = 'source-topic';
+
+  sourceLine.append(sourceLabel, sourceEl);
+  row.append(hd, formula, sourceLine);
+  return row;
+}
+
+function addTrigger() {
+  const el = document.getElementById('kb-triggers');
+  const firstSource = (kbData?.ros_sources || [])[0]?.topic || '';
+  el.appendChild(buildTriggerRow({
+    label: '', condition: 'distance_lt', target_pattern: '__intruder__',
+    threshold: 0.003, sets_variable: '', source_topic: firstSource
+  }));
+  el.lastElementChild.querySelector('.trigger-label-inp').focus();
+}
+
+function collectTriggers() {
+  const triggers = [];
+  document.querySelectorAll('#kb-triggers .trigger-row').forEach(row => {
+    const label        = row.querySelector('.trigger-label-inp').value.trim();
+    const targetPattern = row.querySelector('[data-role="target-pattern"]').value.trim();
+    const condition    = row.querySelector('[data-role="condition"]').value;
+    const threshold    = parseFloat(row.querySelector('[data-role="threshold"]').value) || 0;
+    const setsVar      = row.querySelector('[data-role="sets-variable"]').value.trim();
+    const srcEl        = row.querySelector('[data-role="source-topic"]');
+    const srcTopic     = srcEl ? srcEl.value.trim() : '';
+    if (setsVar) triggers.push({ label, condition, target_pattern: targetPattern, threshold, sets_variable: setsVar, source_topic: srcTopic });
+  });
+  return triggers;
+}
+
+// All preconditions are generic variable checks — no hardcoded types
+const PRECOND_OPS = [
+  { value: 'state_equals', label: '=',  title: 'égal à'      },
+  { value: 'state_below',  label: '<',  title: 'inférieur à' },
+  { value: 'state_above',  label: '>',  title: 'supérieur à' },
+];
+
+function loadKB() {
+  fetch('/api/kb').then(r => r.json()).then(kb => {
+    kbData = kb;
+    renderKB(kb);
+  });
+}
+
+function renderKB(kb) {
+  renderRosSources(kb.ros_sources || []);
+  renderTriggers(kb.event_triggers || []);
+
+  const tasksEl = document.getElementById('kb-tasks');
+  tasksEl.innerHTML = '';
+  for (const [name, def] of Object.entries(kb.tasks || {})) {
+    tasksEl.appendChild(buildTaskCard(name, def));
+  }
+
+  document.getElementById('kb-leaf').innerHTML = Object.entries(kb.leaf_tasks || {}).map(([k, v]) =>
+    `<div class="kb-locked-item"><code>${escHtml(k)}</code><span>${escHtml(v)}</span></div>`
+  ).join('');
+}
+
+function buildTaskCard(taskName, taskDef) {
+  const card = document.createElement('div');
+  card.className = 'task-card';
+  card.dataset.task = taskName;
+
+  const head = document.createElement('div');
+  head.className = 'task-head';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'task-arrow';
+  arrow.textContent = '▶';
+
+  const keyBadge = document.createElement('span');
+  keyBadge.className = 'task-key';
+  keyBadge.textContent = taskName;
+
+  const labelInp = document.createElement('input');
+  labelInp.className = 'task-label-inp';
+  labelInp.value = taskDef.label || taskName;
+  labelInp.placeholder = 'Libellé';
+  labelInp.addEventListener('click', e => e.stopPropagation());
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'icon-btn task-del';
+  delBtn.title = 'Supprimer cette tâche';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', e => { e.stopPropagation(); card.remove(); });
+
+  head.append(arrow, keyBadge, labelInp, delBtn);
+  head.addEventListener('click', () => {
+    head.classList.toggle('open');
+    body.classList.toggle('open');
+  });
+
+  const body = document.createElement('div');
+  body.className = 'task-body';
+
+  const methodsList = document.createElement('div');
+  methodsList.className = 'methods-list';
+  (taskDef.methods || []).forEach(m => methodsList.appendChild(buildMethodCard(m)));
+  body.appendChild(methodsList);
+
+  const addMethodBtn = document.createElement('button');
+  addMethodBtn.className = 'mini-btn';
+  addMethodBtn.style.marginTop = '8px';
+  addMethodBtn.textContent = '+ Ajouter une méthode';
+  addMethodBtn.onclick = () => methodsList.appendChild(buildMethodCard({ name: '', preconditions: [], subtasks: [] }));
+  body.appendChild(addMethodBtn);
+
+  card.append(head, body);
+  return card;
+}
+
+function buildMethodCard(method) {
+  const card = document.createElement('div');
+  card.className = 'method-card';
+
+  const head = document.createElement('div');
+  head.className = 'method-head';
+
+  const badge = document.createElement('span');
+  badge.className = 'method-badge';
+  badge.textContent = 'Méthode';
+
+  const nameInp = document.createElement('input');
+  nameInp.className = 'method-name-inp';
+  nameInp.value = method.name || '';
+  nameInp.placeholder = 'Nom de cette méthode…';
+
+  const upBtn = document.createElement('button');
+  upBtn.className = 'move-btn';
+  upBtn.title = 'Monter';
+  upBtn.textContent = '↑';
+  upBtn.onclick = () => moveCard(card, -1);
+
+  const downBtn = document.createElement('button');
+  downBtn.className = 'move-btn';
+  downBtn.title = 'Descendre';
+  downBtn.textContent = '↓';
+  downBtn.onclick = () => moveCard(card, 1);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del-btn';
+  delBtn.title = 'Supprimer';
+  delBtn.textContent = '×';
+  delBtn.onclick = () => card.remove();
+
+  head.append(badge, nameInp, upBtn, downBtn, delBtn);
+  card.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'method-body';
+
+  // — Preconditions column —
+  const precCol = document.createElement('div');
+  const precTitle = document.createElement('div');
+  precTitle.className = 'method-col-title';
+  precTitle.textContent = 'Préconditions';
+  precCol.appendChild(precTitle);
+
+  const precList = document.createElement('div');
+  precList.className = 'precond-list';
+  (method.preconditions || []).forEach(c => precList.appendChild(buildPrecondRow(c)));
+  precCol.appendChild(precList);
+
+  const addPrecBtn = document.createElement('button');
+  addPrecBtn.className = 'mini-btn';
+  addPrecBtn.textContent = '+ Précondition';
+  addPrecBtn.onclick = () => precList.appendChild(buildPrecondRow({}));
+  precCol.appendChild(addPrecBtn);
+
+  // — Subtasks column —
+  const stCol = document.createElement('div');
+  const stTitle = document.createElement('div');
+  stTitle.className = 'method-col-title';
+  stTitle.textContent = 'Sous-tâches (ordre)';
+  stCol.appendChild(stTitle);
+
+  const stList = document.createElement('div');
+  stList.className = 'subtask-list';
+  (method.subtasks || []).forEach(st => stList.appendChild(buildSubtaskRow(st)));
+  stCol.appendChild(stList);
+
+  const addStBtn = document.createElement('button');
+  addStBtn.className = 'mini-btn';
+  addStBtn.textContent = '+ Sous-tâche';
+  addStBtn.onclick = () => stList.appendChild(buildSubtaskRow({ task: '', args: [] }));
+  stCol.appendChild(addStBtn);
+
+  body.append(precCol, stCol);
+  card.appendChild(body);
+  return card;
+}
+
+// Map legacy hardcoded condition types to the new generic format
+function _legacyToGeneric(cond) {
+  const map = {
+    drone_available: { variable: 'drone_available', value: 'true'  },
+    drone_absent:    { variable: 'drone_available', value: 'false' },
+    intruder_nearby: { variable: 'intruder_nearby', value: 'true'  },
+    weather_equals:  { variable: 'weather',          value: cond.value || '' },
+    agent_present:   { variable: cond.value || '',   value: 'true'  },
+    agent_absent:    { variable: cond.value || '',   value: 'false' },
+  };
+  return map[cond.type] || { variable: cond.variable || '', value: cond.value || '' };
+}
+
+function buildPrecondRow(cond) {
+  const row = document.createElement('div');
+  row.className = 'precond-row';
+
+  // Normalise legacy format
+  const isNew = cond.type && cond.type.startsWith('state_');
+  const norm = isNew ? cond : { type: 'state_equals', ..._legacyToGeneric(cond) };
+
+  const varInp = document.createElement('input');
+  varInp.className = 'prec-var-inp';
+  varInp.value = norm.variable || '';
+  varInp.placeholder = 'variable';
+
+  const opSel = document.createElement('select');
+  opSel.className = 'prec-op-sel';
+  PRECOND_OPS.forEach(op => {
+    const opt = document.createElement('option');
+    opt.value = op.value;
+    opt.textContent = op.label;
+    opt.title = op.title;
+    if (norm.type === op.value) opt.selected = true;
+    opSel.appendChild(opt);
+  });
+
+  const valInp = document.createElement('input');
+  valInp.className = 'prec-val-inp';
+  valInp.value = norm.value || '';
+  valInp.placeholder = 'valeur';
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.textContent = '×';
+  del.onclick = () => row.remove();
+
+  row.append(varInp, opSel, valInp, del);
+  return row;
+}
+
+function buildSubtaskRow(st) {
+  const row = document.createElement('div');
+  row.className = 'subtask-row';
+
+  // Top: task selector + delete
+  const top = document.createElement('div');
+  top.className = 'subtask-top';
+
+  const taskSel = document.createElement('select');
+  taskSel.className = 'subtask-task-sel';
+
+  // All HTN tasks + leaf tasks (not primitives)
+  const allTasks = Object.assign({}, kbData?.tasks || {},
+    Object.fromEntries(Object.entries(kbData?.leaf_tasks || {}).map(([k, v]) => [k, { label: v }]))
+  );
+  Object.entries(allTasks).forEach(([k, v]) => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = v.label || k;
+    if (k === st.task) opt.selected = true;
+    taskSel.appendChild(opt);
+  });
+
+  const stDel = document.createElement('button');
+  stDel.className = 'del-btn';
+  stDel.textContent = '×';
+  stDel.title = 'Supprimer sous-tâche';
+  stDel.onclick = () => row.remove();
+
+  top.append(taskSel, stDel);
+  row.appendChild(top);
+
+  // Arguments row
+  const argsRow = document.createElement('div');
+  argsRow.className = 'subtask-args-row';
+
+  const argsLabel = document.createElement('span');
+  argsLabel.className = 'args-label';
+  argsLabel.textContent = 'Args :';
+  argsRow.appendChild(argsLabel);
+
+  (st.args || []).forEach(a => argsRow.appendChild(buildArgChip(a)));
+
+  const addArgBtn = document.createElement('button');
+  addArgBtn.className = 'mini-btn';
+  addArgBtn.style.cssText = 'font-size:11px;padding:2px 7px';
+  addArgBtn.textContent = '+ arg';
+  addArgBtn.title = 'Ajouter un argument';
+  addArgBtn.onclick = () => argsRow.insertBefore(buildArgChip('__self__'), addArgBtn);
+  argsRow.appendChild(addArgBtn);
+
+  row.appendChild(argsRow);
+  return row;
+}
+
+function buildArgChip(val) {
+  const chip = document.createElement('div');
+  chip.className = 'arg-chip';
+
+  const customInp = document.createElement('input');
+  customInp.className = 'arg-custom-inp';
+  customInp.placeholder = '__token__ ou nom d’agent';
+  customInp.value = val || '__self__';
+
+  const del = document.createElement('button');
+  del.className = 'arg-del';
+  del.textContent = '×';
+  del.onclick = () => chip.remove();
+
+  chip.append(customInp, del);
+  return chip;
+}
+
+function moveCard(el, dir) {
+  const parent = el.parentNode;
+  if (dir === -1) {
+    const prev = el.previousElementSibling;
+    if (prev) parent.insertBefore(el, prev);
+  } else {
+    const next = el.nextElementSibling;
+    if (next) parent.insertBefore(next, el);
+  }
+}
+
+function addTask() {
+  const name = prompt('Identifiant de la nouvelle tâche (ex: inspecter) :');
+  if (!name?.trim()) return;
+  const key = name.trim().replace(/\s+/g, '_');
+  const card = buildTaskCard(key, { label: key, methods: [] });
+  card.querySelector('.task-head').classList.add('open');
+  card.querySelector('.task-body').classList.add('open');
+  document.getElementById('kb-tasks').appendChild(card);
+}
+
+function collectKB() {
+  const tasks = {};
+
+  document.querySelectorAll('#kb-tasks .task-card').forEach(card => {
+    const taskName = card.dataset.task;
+    const label = card.querySelector('.task-label-inp').value.trim() || taskName;
+    const methods = [];
+
+    card.querySelectorAll('.method-card').forEach(mc => {
+      const name = mc.querySelector('.method-name-inp').value.trim();
+      const preconditions = [];
+      const subtasks = [];
+
+      mc.querySelectorAll('.precond-row').forEach(pr => {
+        const type     = pr.querySelector('.prec-op-sel').value;
+        const variable = pr.querySelector('.prec-var-inp').value.trim();
+        const value    = pr.querySelector('.prec-val-inp').value.trim();
+        if (variable) preconditions.push({ type, variable, value });
+      });
+
+      mc.querySelectorAll('.subtask-row').forEach(sr => {
+        const task = sr.querySelector('.subtask-task-sel').value;
+        const args = [];
+        sr.querySelectorAll('.arg-chip').forEach(chip => {
+          const v = chip.querySelector('.arg-custom-inp').value.trim();
+          if (v) args.push(v);
+        });
+        if (task) subtasks.push({ task, args });
+      });
+
+      methods.push({ name, preconditions, subtasks });
+    });
+
+    tasks[taskName] = { label, methods };
+  });
+
+  return {
+    ros_sources:    collectRosSources(),
+    event_triggers: collectTriggers(),
+    // resolve_tokens auto-generated from trigger patterns — not manually configured
+    resolve_tokens: Object.fromEntries(
+      collectTriggers()
+        .filter(t => t.target_pattern && t.sets_variable)
+        .map(t => [_tokenFromVar(t.sets_variable), t.target_pattern])
+    ),
+    tasks,
+    leaf_tasks:        kbData?.leaf_tasks        || {},
+    primitive_actions: kbData?.primitive_actions || {},
+  };
+}
+
+function saveKB() {
+  const kb = collectKB();
+  fetch('/api/kb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(kb),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        kbData = kb;
+        toast('Base de connaissances sauvegardée');
+      } else {
+        toast('Erreur lors de la sauvegarde');
+      }
+    })
+    .catch(() => toast('Erreur réseau'));
+}
+
+// ── Shared utils ──────────────────────────────────────────────────────────────
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -907,7 +2306,8 @@ function escHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 </script>
 </body>

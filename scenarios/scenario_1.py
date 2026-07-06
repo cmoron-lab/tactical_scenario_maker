@@ -23,6 +23,7 @@ AGENTS = {
         'linear_velocities_limits': (0, 5),
         'angular_velocities_limits': 0.05,
         'equipement': {},
+        'is_intruder': True,
         'mission': ('aller', 'intru', (1.2645794, 103.7516212)),  # Passe dans la zone de détection et remonte au nord
     },
 }

@@ -41,14 +41,14 @@ def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angula
     node.get_logger().info(f"Spawned: {res_fut.result().result.name}")
 
 
-def send_mas_cmd(state, agent, pos):
+def aller_a(state, agent, pos):
     """Action pure : met à jour le state (simulation, pas de ROS)."""
     state.agents[agent]['pos'] = {'lat': pos[0], 'lon': pos[1]}
     state.agents[agent]['last_waypoint'] = pos
     return state
 
 
-def c_send_mas_cmd(state, agent, pos):
+def c_aller_a(state, agent, pos):
     """Command : envoie le waypoint ROS et met à jour le state."""
     from geographic_msgs.msg import GeoPoint
     from lotusim_msgs.srv import SetWaypoints
@@ -73,5 +73,5 @@ def c_send_mas_cmd(state, agent, pos):
     return state
 
 
-gtpyhop.declare_actions(send_mas_cmd)
-gtpyhop.declare_commands(c_send_mas_cmd)
+gtpyhop.declare_actions(aller_a)
+gtpyhop.declare_commands(c_aller_a)

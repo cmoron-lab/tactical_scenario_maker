@@ -36,6 +36,7 @@ AGENTS = {
         'linear_velocities_limits': (0, 8),
         'angular_velocities_limits': 0.05,
         'equipement': {},
+        'is_intruder': True,
         'mission': ('aller', 'intruder', (1.2605794, 103.7566212)),
     },
 }

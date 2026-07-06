@@ -1,138 +1,141 @@
+import json
+from pathlib import Path
+
 import gtpyhop
 from bdd.utils import in_zone, MIN_MOVE_DEG
 
-
-# ── veille ────────────────────────────────────────────────────────────────────
-#
-# Préconditions scénario :
-#   (aucune — intruder_nearby est calculé automatiquement par main.py)
-
-def veille_m(state, agent):
-    """Attend que l'intruder soit détecté, puis déclenche respond_to_intruder."""
-    if not state.agents[agent].get('intruder_nearby'):
-        return False
-    return [('respond_to_intruder', agent)]
+_KB_PATH = Path(__file__).parent / 'knowledge_base.json'
 
 
-# ── respond_to_intruder ───────────────────────────────────────────────────────
-#
-# Les méthodes sont essayées dans l'ordre ; la première dont les préconditions
-# passent est choisie (logique HTN avec backtracking).
-#
-# Préconditions scénario pour chaque méthode :
-#
-#   M1 (coordonné) :
-#     - equipement.drone = True
-#     - equipement.weather = 'clear'
-#     - un agent 'usv_intercept' avec available = True dans le scénario
-#
-#   M2 (drone seul, météo) :
-#     - equipement.drone = True
-#     - equipement.weather = 'clear'
-#
-#   M3 (backup sans drone) :
-#     - equipement.drone = False  (ou absent)
-#     - un agent 'usv_intercept' avec available = True dans le scénario
-#
-#   M4 (drone seul, sans contrainte météo) :
-#     - equipement.drone = True
-#
-#   M5 (fallback, toujours applicable) :
-#     - (aucune)
+# ── Préconditions ─────────────────────────────────────────────────────────────
 
-def respond_to_intruder_m1(state, agent):
-    """M1 — Drone + météo claire + intercepteur dispo → déploiement coordonné."""
-    if not state.agents[agent].get('drone_available'):
-        return False
-    if state.agents[agent].get('weather') != 'clear':
-        return False
-    if not state.agents.get('usv_intercept', {}).get('available'):
-        return False
-    return [
-        ('deployer_drone', agent),
-        ('ordonner_intercept', 'usv_intercept', 'intruder'),
-        ('maintenir_contact', agent, 'intruder'),
-    ]
+def _check(cond, agent, state):
+    t   = cond['type']
+    v   = cond.get('value', '')
+    var = cond.get('variable', '')
+    ag  = state.agents.get(agent, {})
+
+    # ── Generic variable checks (new format) ──────────────────────────────
+    if t == 'state_equals':
+        cur = ag.get(var)
+        v_lo = str(v).lower()
+        if v_lo in ('true', 'false'):           # boolean comparison
+            return bool(cur) == (v_lo == 'true')
+        return str(cur) == str(v)
+
+    if t == 'state_below':
+        try:    return float(ag.get(var) or 0) < float(v or 0)
+        except: return False
+
+    if t == 'state_above':
+        try:    return float(ag.get(var) or 0) > float(v or 0)
+        except: return False
+
+    # ── Legacy aliases (backwards compat with old KB files) ───────────────
+    if t == 'drone_available':  return bool(ag.get('drone_available'))
+    if t == 'drone_absent':     return not bool(ag.get('drone_available'))
+    if t == 'weather_equals':   return ag.get('weather') == v
+    if t == 'intruder_nearby':  return bool(ag.get('intruder_nearby'))
+    if t == 'agent_present':    return bool(v) and v in state.agents and state.agents[v].get('available', True)
+    if t == 'agent_absent':     return bool(v) and v not in state.agents
+    return True
 
 
-def respond_to_intruder_m2(state, agent):
-    """M2 — Drone + météo claire, pas d'intercepteur → drone + suivre."""
-    if not state.agents[agent].get('drone_available'):
-        return False
-    if state.agents[agent].get('weather') != 'clear':
-        return False
-    return [
-        ('deployer_drone', agent),
-        ('suivre', agent, 'intruder'),
-    ]
+# ── Résolution des arguments ──────────────────────────────────────────────────
+
+_resolve_tokens: dict = {}   # populated by load_kb() from KB resolve_tokens section
 
 
-def respond_to_intruder_m3(state, agent):
-    """M3 — Pas de drone, intercepteur dispo → suivre + interception coordonnée."""
-    if state.agents[agent].get('drone_available'):
-        return False
-    if not state.agents.get('usv_intercept', {}).get('available'):
-        return False
-    target = 'intruder' if 'intruder' in state.agents else 'intru'
-    return [
-        ('suivre', agent, target),
-        ('ordonner_intercept', 'usv_intercept', target),
-    ]
+def _find_agent_by_pattern(state, pattern):
+    if not pattern:
+        return None
+    target = str(pattern).strip()
+    norm = target.strip('_').lower()
+
+    for name, data in state.agents.items():
+        if name == target:
+            return name
+        if target and target.lower() in name.lower():
+            return name
+        role = str(data.get('role', '')).strip().lower()
+        kind = str(data.get('kind', '')).strip().lower()
+        if role and (role == norm or norm in role):
+            return name
+        if kind and (kind == norm or norm in kind):
+            return name
+
+    for name, data in state.agents.items():
+        if data.get('is_intruder') and norm in {'intruder', 'intru', 'intruderagent', 'intrud'}:
+            return name
+        if data.get('is_base') and norm in {'base', 'port', 'dock', 'harbor'}:
+            return name
+        if str(data.get('role', '')).strip().lower() == 'base' and norm in {'base', 'port', 'dock', 'harbor'}:
+            return name
+        if 'base' in str(name).lower() and norm in {'base', 'port', 'dock', 'harbor'}:
+            return name
+
+    return None
 
 
-def respond_to_intruder_m_deploy_drone(state, agent):
-    """
-    M-drone — USV équipé d'un drone ET agent 'drone' présent → USV reste sur place,
-    le drone suit l'intruder via sa propre boucle veille.
-
-    Préconditions scénario :
-      - equipement.drone = True
-      - un agent nommé 'drone' présent dans le scénario avec mission ('veille', 'drone')
-    """
-    if not state.agents[agent].get('drone_available'):
-        return False
-    if 'drone' not in state.agents:
-        return False
-    return []  # USV ne fait rien ; le drone gère la poursuite de son côté
+def _resolve(arg, agent, state):
+    if arg == '__self__':
+        return agent
+    if arg in _resolve_tokens:
+        pattern = _resolve_tokens[arg]
+        resolved = _find_agent_by_pattern(state, pattern)
+        if resolved:
+            return resolved
+        return arg.strip('_') if arg.startswith('__') and arg.endswith('__') else arg
+    return arg
 
 
-def respond_to_intruder_m4(state, agent):
-    """M4 — Drone disponible mais pas d'agent 'drone' dans le scénario → USV se déplace vers l'intruder."""
-    if not state.agents[agent].get('drone_available'):
-        return False
-    target = 'intruder' if 'intruder' in state.agents else 'intru'
-    return [('deployer_drone_vers', agent, target)]
+# ── Génération dynamique de méthodes ─────────────────────────────────────────
+
+def _make_method(preconditions, subtasks):
+    def method(state, agent):
+        for cond in preconditions:
+            if not _check(cond, agent, state):
+                return False
+        return [
+            tuple([st['task']] + [_resolve(a, agent, state) for a in st.get('args', [])])
+            for st in subtasks
+        ]
+    return method
 
 
-def respond_to_intruder_m5(state, agent):
-    """M5 — Fallback : suivre direct."""
-    target = 'intruder' if 'intruder' in state.agents else 'intru'
-    return [('suivre', agent, target)]
+# ── Chargement depuis knowledge_base.json ────────────────────────────────────
+
+def load_kb():
+    global _resolve_tokens
+    with open(_KB_PATH, encoding='utf-8') as f:
+        kb = json.load(f)
+
+    # Load resolve tokens (e.g. {'__intruder__': 'intru'})
+    _resolve_tokens = dict(kb.get('resolve_tokens', {}))
+
+    for task_name, task_def in kb['tasks'].items():
+        methods = []
+        for i, m in enumerate(task_def['methods']):
+            fn = _make_method(m['preconditions'], m['subtasks'])
+            fn.__name__ = f'm_{task_name}_{i}'
+            methods.append(fn)
+        if methods:
+            gtpyhop.declare_task_methods(task_name, *methods)
+
+    return kb
 
 
-# ── deployer_drone ────────────────────────────────────────────────────────────
+# ── Méthodes feuilles (locked — logique de mouvement) ────────────────────────
 
-def deployer_drone_m(state, agent):
-    """
-    Préconditions scénario :
-      - equipement.drone = True
-    Cible implicite : 'intruder' ou 'intru' selon le scénario.
-    """
-    target = 'intruder' if 'intruder' in state.agents else 'intru'
-    return [('deployer_drone_vers', agent, target)]
-
-
-def deployer_drone_vers_m(state, agent, target):
+def aller_a_agent_m(state, agent, target):
     pos = state.agents.get(target, {}).get('pos')
     if pos is None:
         return False
     last = state.agents[agent].get('last_waypoint')
     if last and in_zone({'lat': last[0], 'lon': last[1]}, pos, MIN_MOVE_DEG):
         return False
-    return [('send_mas_cmd', agent, (pos['lat'], pos['lon']))]
+    return [('aller_a', agent, (pos['lat'], pos['lon']))]
 
-
-# ── suivre ────────────────────────────────────────────────────────────────────
 
 def suivre_m(state, agent, target):
     pos = state.agents.get(target, {}).get('pos')
@@ -141,16 +144,10 @@ def suivre_m(state, agent, target):
     last = state.agents[agent].get('last_waypoint')
     if last and in_zone({'lat': last[0], 'lon': last[1]}, pos, MIN_MOVE_DEG):
         return False
-    return [('send_mas_cmd', agent, (pos['lat'], pos['lon']))]
+    return [('aller_a', agent, (pos['lat'], pos['lon']))]
 
-
-# ── maintenir_contact ─────────────────────────────────────────────────────────
 
 def maintenir_contact_m(state, agent, target):
-    """
-    Préconditions scénario : (aucune)
-    Suit la cible avec un décalage de ~100m pour garder le contact sans collision.
-    """
     pos = state.agents.get(target, {}).get('pos')
     if pos is None:
         return False
@@ -159,43 +156,27 @@ def maintenir_contact_m(state, agent, target):
     if last and in_zone({'lat': last[0], 'lon': last[1]},
                         {'lat': follow_pos[0], 'lon': follow_pos[1]}, MIN_MOVE_DEG):
         return False
-    return [('send_mas_cmd', agent, follow_pos)]
+    return [('aller_a', agent, follow_pos)]
 
-
-# ── standby ───────────────────────────────────────────────────────────────────
 
 def standby_m(state, agent):
-    """
-    Préconditions scénario : (aucune)
-    Attend un ordre de coordination dans state.orders[agent].
-    L'ordre est écrit par ordonner_intercept (action).
-    """
     order = getattr(state, 'orders', {}).get(agent)
     if order is None:
         return False
-    last = state.agents[agent].get('last_waypoint')
-    if last == order:
-        return False  # Ordre déjà exécuté, attend le prochain
-    return [('send_mas_cmd', agent, order)]
+    if state.agents[agent].get('last_waypoint') == order:
+        return False
+    return [('aller_a', agent, order)]
 
-
-# ── aller ─────────────────────────────────────────────────────────────────────
 
 def aller_m(state, agent, pos):
-    return [('send_mas_cmd', agent, pos)]
+    return [('aller_a', agent, pos)]
 
+def aller_a_position_m(state, agent, pos):
+    return [('aller_a', agent, pos)]
 
-# ── Action de coordination : ordonner_intercept ───────────────────────────────
+# ── Action de coordination ────────────────────────────────────────────────────
 
 def ordonner_intercept(state, agent, target):
-    """
-    Action pure — calcule le point d'interception devant la cible
-    et l'écrit dans state.orders[agent].
-
-    Préconditions scénario :
-      - un agent nommé 'agent' (ex: 'usv_intercept') présent dans le scénario
-      - state.position_history alimenté automatiquement par main.py
-    """
     pos = state.agents.get(target, {}).get('pos')
     if pos is None:
         return False
@@ -218,21 +199,12 @@ def _predict_intercept(pos, history, steps=5):
 
 # ── Déclarations GTpyhop ──────────────────────────────────────────────────────
 
-gtpyhop.declare_task_methods('veille', veille_m)
-
-gtpyhop.declare_task_methods('respond_to_intruder',
-                             respond_to_intruder_m1,
-                             respond_to_intruder_m2,
-                             respond_to_intruder_m3,
-                             respond_to_intruder_m_deploy_drone,
-                             respond_to_intruder_m4,
-                             respond_to_intruder_m5)
-
-gtpyhop.declare_task_methods('deployer_drone', deployer_drone_m)
-gtpyhop.declare_task_methods('deployer_drone_vers', deployer_drone_vers_m)
-gtpyhop.declare_task_methods('suivre', suivre_m)
-gtpyhop.declare_task_methods('maintenir_contact', maintenir_contact_m)
-gtpyhop.declare_task_methods('standby', standby_m)
-gtpyhop.declare_task_methods('aller', aller_m)
-
+gtpyhop.declare_task_methods('aller_a_agent',       aller_a_agent_m)
+gtpyhop.declare_task_methods('suivre',              suivre_m)
+gtpyhop.declare_task_methods('maintenir_contact',   maintenir_contact_m)
+gtpyhop.declare_task_methods('standby',             standby_m)
+gtpyhop.declare_task_methods('aller',               aller_m)
+gtpyhop.declare_task_methods('aller_a_position',    aller_a_position_m)
 gtpyhop.declare_actions(ordonner_intercept)
+
+load_kb()
