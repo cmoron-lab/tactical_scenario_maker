@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Scenario Maker — Naval Group</title>
+<style>
+:root {
+  --navy:       #002B60;
+  --navy-mid:   #003E8A;
+  --navy-light: #EEF3FA;
+  --bg:         #F4F6F9;
+  --surface:    #FFFFFF;
+  --border:     #D2DBE7;
+  --border-hi:  #9BB3CC;
+  --text:       #131E2D;
+  --text2:      #5A718A;
+  --text3:      #9DB2C8;
+  --blue:       #0057B8;
+  --blue-hi:    #1A70D0;
+  --red:        #C8002A;
+  --green:      #1A7A48;
+  --shadow:     0 1px 4px rgba(0,43,96,0.10);
+  --shadow-md:  0 4px 16px rgba(0,43,96,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+header {
+  background: var(--navy);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Simple "NG" logo mark */
+.logo-mark span {
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.logo-text {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.2);
+}
+
+.header-app {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 0.2px;
+}
+
+/* ── App layout ──────────────────────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 56px);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 0 8px;
+  margin-bottom: 10px;
+}
+
+.sc-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sc-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  cursor: default;
+  transition: background 0.12s, border-color 0.12s;
+}
+.sc-item:hover { background: var(--navy-light); }
+.sc-item.active {
+  background: var(--navy-light);
+  border-color: var(--border-hi);
+}
+
+.sc-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-item.active .sc-name { color: var(--blue); font-weight: 600; }
+
+.sc-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+.sc-btn:hover { background: #F0F0F0; color: var(--text2); }
+.sc-btn.del:hover { background: #FDECEA; color: var(--red); }
+
+.sidebar-footer {
+  padding-top: 14px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sc-empty {
+  color: var(--text3);
+  font-size: 13px;
+  padding: 8px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: all 0.14s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.btn-full { width: 100%; justify-content: center; }
+
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--border-hi);
+  color: var(--text2);
+}
+.btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-hi); }
+
+.btn-navy { background: var(--navy); color: #fff; }
+.btn-navy:hover { background: var(--navy-mid); }
+
+.btn-success { background: var(--green); color: #fff; }
+.btn-success:hover { background: #228855; }
+
+.btn-launch {
+  background: #1A6E2E;
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  padding: 10px 24px;
+}
+.btn-launch:hover { background: #218838; }
+.btn-launch:disabled { background: #888; cursor: not-allowed; opacity: 0.7; }
+
+.launch-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+.launch-status.running {
+  background: #EBF7EE;
+  border: 1px solid #A8D8B0;
+  color: var(--green);
+}
+.launch-status.error {
+  background: #FDECEA;
+  border: 1px solid #F5C6C6;
+  color: var(--red);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text2);
+}
+.btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border-hi); }
+
+/* ── Editor ──────────────────────────────────────────────────────────── */
+.editor {
+  padding: 28px 32px;
+  overflow-y: auto;
+}
+
+.editor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  color: var(--text3);
+  text-align: center;
+  gap: 12px;
+}
+.editor-empty .icon { font-size: 36px; opacity: 0.4; }
+.editor-empty p { font-size: 15px; }
+
+/* Scenario name row */
+.scenario-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-name-input {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 6px;
+  width: 260px;
+  transition: border-color 0.12s;
+}
+.sc-name-input:focus { outline: none; border-color: var(--blue); }
+.sc-name-input:read-only { border-color: transparent; background: transparent; padding-left: 0; color: var(--navy); }
+
+.sc-file-pill {
+  padding: 4px 12px;
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  letter-spacing: 0.2px;
+}
+
+/* ── Agent card ──────────────────────────────────────────────────────── */
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.agent-head {
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  background: var(--navy);
+  gap: 12px;
+}
+
+.agent-name-display {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.agent-type-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.agent-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.agent-remove:hover { color: #fff; background: rgba(200,0,42,0.4); }
+
+/* ── Form grid ───────────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+  padding: 18px 18px 14px;
+}
+.fw { grid-column: 1 / -1; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  letter-spacing: 0.2px;
+}
+
+.field input,
+.field select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  width: 100%;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
+}
+.field select option { background: #fff; }
+
+/* ── Mission row ─────────────────────────────────────────────────────── */
+.mission-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.task-select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  flex: 1 1 180px;
+  min-width: 160px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.task-select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
+}
+.task-select option { background: #fff; }
+
+.mission-extra {
+  flex: 2 1 220px;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mission-extra input,
+.mission-extra select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  flex: 1 1 120px;
+  min-width: 0;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.mission-extra input:focus,
+.mission-extra select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
+}
+.mission-extra select option { background: #fff; }
+
+/* ── Action bar ──────────────────────────────────────────────────────── */
+.action-bar {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/* ── Plan section ────────────────────────────────────────────────────── */
+.plan-section {
+  margin-top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.plan-head {
+  padding: 12px 20px;
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plan-head-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.3px;
+}
+
+.plan-head-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+}
+
+.plan-body { padding: 6px 0; }
+
+.plan-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.plan-row:last-child { border-bottom: none; }
+
+.plan-agent {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  padding-top: 2px;
+}
+
+.plan-val {
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  color: var(--green);
+  background: #F4FAF6;
+  border: 1px solid #C8E6D4;
+  border-radius: 4px;
+  padding: 6px 10px;
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+.plan-val.empty { color: var(--text2); background: var(--bg); border-color: var(--border); font-style: italic; }
+.plan-val.waiting { color: #7A5A00; background: #FFFBEE; border-color: #F0D980; font-style: italic; }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 999;
+  max-width: 320px;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"><span>NG</span></div>
+    <span class="logo-text">Naval Group</span>
+  </div>
+  <div class="header-divider"></div>
+  <span class="header-app">Tactical Scenario Maker</span>
+</header>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-title">Scénarios</div>
+    <div class="sc-list" id="sc-list">
+      <div class="sc-empty">Chargement…</div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="btn btn-outline btn-full" onclick="newScenario()">
+        + Nouveau scénario
+      </button>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor" id="editor">
+    <div class="editor-empty">
+      <div class="icon">⚓</div>
+      <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Task catalogue (from bdd/tasks_methods.py) ────────────────────────────────
+const TASKS = {
+  'veille':              { label: 'Veille',                extra: 'none'   },
+  'standby':             { label: 'Standby',               extra: 'none'   },
+  'deployer_drone':      { label: 'Déployer drone',        extra: 'none'   },
+  'aller':               { label: 'Aller à position',      extra: 'pos'    },
+  'suivre':              { label: 'Suivre un agent',       extra: 'target' },
+  'deployer_drone_vers': { label: 'Déployer drone vers',   extra: 'target' },
+  'maintenir_contact':   { label: 'Maintenir contact',     extra: 'target' },
+};
+
+let current = null;
+loadList();
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function loadList() {
+  fetch('/api/scenarios').then(r => r.json()).then(list => {
+    const el = document.getElementById('sc-list');
+    if (!list.length) {
+      el.innerHTML = '<div class="sc-empty">Aucun scénario</div>';
+      return;
+    }
+    el.innerHTML = list.map(n => `
+      <div class="sc-item ${n === current ? 'active' : ''}" id="si-${n}">
+        <span class="sc-name" onclick="selectScenario('${n}')">${n}</span>
+        <button class="sc-btn del" title="Supprimer" onclick="deleteScenario('${n}')">✕</button>
+      </div>
+    `).join('');
+  });
+}
+
+function selectScenario(name) {
+  current = name;
+  fetch(`/api/scenario/${name}`).then(r => r.json()).then(agents => {
+    renderEditor(name, agents, false);
+    loadList();
+  });
+}
+
+function newScenario() {
+  current = null;
+  renderEditor('', {}, true);
+  loadList();
+}
+
+// ── Editor ────────────────────────────────────────────────────────────────────
+function renderEditor(name, agents, isNew) {
+  document.getElementById('editor').innerHTML = `
+    <div class="scenario-bar">
+      <input class="sc-name-input" id="sc-name-inp"
+        value="${name}" placeholder="Nom du scénario"
+        ${isNew ? '' : 'readonly'}>
+      ${!isNew ? `<span class="sc-file-pill">${name}.py</span>` : ''}
+    </div>
+    <div id="agents-wrap"></div>
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="addAgent()">+ Ajouter un agent</button>
+      <button class="btn btn-primary" onclick="saveScenario()">Enregistrer</button>
+      <button class="btn btn-navy" onclick="computePlan()">Calculer plan HTN</button>
+      ${!isNew ? `<button class="btn btn-launch" onclick="launchScenario('${name}')">▶ Lancer sur Lotusim</button>` : ''}
+    </div>
+    <div id="launch-status"></div>
+    <div id="plan-section" class="plan-section" style="display:none">
+      <div class="plan-head">
+        <span class="plan-head-title">Plan HTN calculé</span>
+        <span class="plan-head-sub">État initial · intruder détecté</span>
+      </div>
+      <div class="plan-body" id="plan-body"></div>
+    </div>
+  `;
+  const wrap = document.getElementById('agents-wrap');
+  for (const [aname, a] of Object.entries(agents)) {
+    wrap.appendChild(buildCard(aname, a));
+  }
+}
+
+// ── Agent card ────────────────────────────────────────────────────────────────
+function buildCard(name, a = {}) {
+  const div = document.createElement('div');
+  div.className = 'agent-card';
+  div.id = `ac-${name}`;
+
+  const equip = JSON.stringify(a.equipement || {});
+  const parsed = parseMission(a.mission || '');
+
+  div.innerHTML = `
+    <div class="agent-head">
+      <span class="agent-type-chip">Agent</span>
+      <span class="agent-name-display">${name}</span>
+      <button class="agent-remove" onclick="removeCard('${name}')">Supprimer</button>
+    </div>
+    <div class="form-grid" data-agent="${name}">
+      <div class="field">
+        <label>Latitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~1.25–1.27)</span></label>
+        <input name="x" type="number" step="any" value="${a.x ?? ''}" placeholder="1.2605"
+          oninput="warnCoord(this, 1.0, 2.0)">
+      </div>
+      <div class="field">
+        <label>Longitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~103.7–103.8)</span></label>
+        <input name="y" type="number" step="any" value="${a.y ?? ''}" placeholder="103.7516"
+          oninput="warnCoord(this, 103.0, 104.0)">
+      </div>
+      <div class="field">
+        <label>Modèle</label>
+        <input name="model" value="${a.model ?? 'wamv'}">
+      </div>
+      <div class="field">
+        <label>Vitesse linéaire [min max]</label>
+        <input name="vel" value="${a.vel_min ?? 0} ${a.vel_max ?? 5}">
+      </div>
+      <div class="field fw">
+        <label>Équipement (JSON)</label>
+        <input name="equipement" value='${equip}' placeholder='{"drone": true}'>
+      </div>
+      <div class="field fw">
+        <label>Mission</label>
+        <div class="mission-row">
+          <select name="task" class="task-select"
+            onchange="updateExtra('${name}', this.value)">
+            ${Object.entries(TASKS).map(([k, t]) =>
+              `<option value="${k}" ${k === parsed.task ? 'selected' : ''}>${t.label}</option>`
+            ).join('')}
+          </select>
+          <div class="mission-extra" id="mex-${name}"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  setTimeout(() => updateExtra(name, parsed.task, parsed.extra), 0);
+  return div;
+}
+
+function parseMission(str) {
+  const p = str.trim().split(/\s+/);
+  return { task: p[0] || 'veille', extra: p.slice(2) };
+}
+
+function updateExtra(agentName, task, init = []) {
+  const el = document.getElementById(`mex-${agentName}`);
+  if (!el) return;
+  const type = TASKS[task]?.extra || 'none';
+
+  if (type === 'none') {
+    el.innerHTML = '';
+  } else if (type === 'pos') {
+    el.innerHTML = `
+      <input name="mission_lat" type="number" step="any"
+        placeholder="Latitude cible" value="${init[0] ?? ''}">
+      <input name="mission_lon" type="number" step="any"
+        placeholder="Longitude cible" value="${init[1] ?? ''}">
+    `;
+  } else {
+    const others = [...document.querySelectorAll('.form-grid')]
+      .map(d => d.dataset.agent).filter(n => n && n !== agentName);
+    el.innerHTML = `
+      <select name="mission_target">
+        <option value="">Sélectionner une cible…</option>
+        ${others.map(n =>
+          `<option value="${n}" ${n === (init[0] ?? '') ? 'selected' : ''}>${n}</option>`
+        ).join('')}
+      </select>
+    `;
+  }
+}
+
+function addAgent() {
+  const name = prompt('Nom du nouvel agent :');
+  if (!name?.trim()) return;
+  document.getElementById('agents-wrap').appendChild(buildCard(name.trim(), {}));
+}
+
+function removeCard(name) {
+  document.getElementById(`ac-${name}`)?.remove();
+}
+
+// ── Collect ───────────────────────────────────────────────────────────────────
+function collectAgents() {
+  const data = {};
+  document.querySelectorAll('.form-grid').forEach(div => {
+    const aname = div.dataset.agent;
+    const g = n => div.querySelector(`[name="${n}"]`)?.value?.trim() ?? '';
+    const [vm, vM] = g('vel').split(/\s+/).map(Number);
+    let equip = {};
+    try { equip = JSON.parse(g('equipement') || '{}'); } catch (_) {}
+
+    const task = g('task');
+    const type = TASKS[task]?.extra ?? 'none';
+    let mission = `${task} ${aname}`;
+    if (type === 'pos') {
+      const lat = g('mission_lat'), lon = g('mission_lon');
+      if (lat && lon) mission += ` ${lat} ${lon}`;
+    } else if (type === 'target') {
+      const t = g('mission_target');
+      if (t) mission += ` ${t}`;
+    }
+
+    data[aname] = {
+      x: parseFloat(g('x')),   y: parseFloat(g('y')),
+      model: g('model') || 'wamv',
+      vel_min: isNaN(vm) ? 0 : vm,  vel_max: isNaN(vM) ? 5 : vM,
+      ang_vel: 0.05,
+      equipement: equip,  mission,
+    };
+  });
+  return data;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function saveScenario() {
+  const inp = document.getElementById('sc-name-inp');
+  const name = inp?.value?.trim();
+  if (!name) { toast('Entrez un nom de scénario.'); return; }
+  const scName = current || name;
+  fetch(`/api/scenario/${scName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(collectAgents()),
+  }).then(() => {
+    const wasNew = !current;
+    current = scName;
+    if (wasNew) {
+      // Re-render pour afficher le bouton Lancer
+      fetch(`/api/scenario/${scName}`).then(r => r.json()).then(agents => {
+        renderEditor(scName, agents, false);
+        loadList();
+      });
+    } else {
+      if (inp) { inp.value = scName; inp.readOnly = true; }
+      loadList();
+    }
+    toast('Scénario enregistré — ' + scName);
+  });
+}
+
+function deleteScenario(name) {
+  if (!confirm(`Supprimer le scénario « ${name} » ?`)) return;
+  fetch(`/api/scenario/${name}`, { method: 'DELETE' }).then(() => {
+    if (current === name) {
+      current = null;
+      document.getElementById('editor').innerHTML = `
+        <div class="editor-empty">
+          <div class="icon">⚓</div>
+          <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
+        </div>`;
+    }
+    toast('Scénario supprimé — ' + name);
+    loadList();
+  });
+}
+
+function launchScenario(name) {
+  const statusEl = document.getElementById('launch-status');
+  const btn = document.querySelector('.btn-launch');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Lancement…'; }
+
+  fetch(`/api/scenario/${name}/launch`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <div class="launch-status running">
+            ● main.py lancé — scénario : <strong>${name}</strong> · PID ${d.pid}
+          </div>`;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
+    })
+    .catch(() => {
+      if (statusEl) {
+        statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
+    });
+}
+
+function computePlan() {
+  const name = current || document.getElementById('sc-name-inp')?.value?.trim();
+  if (!name) { toast('Enregistrez d\'abord le scénario.'); return; }
+  fetch(`/api/scenario/${name}/plan`).then(r => r.json()).then(plans => {
+    const sec  = document.getElementById('plan-section');
+    const body = document.getElementById('plan-body');
+    if (!sec || !body) return;
+    sec.style.display = 'block';
+    body.innerHTML = Object.entries(plans).map(([agent, plan]) => {
+      let cls = 'plan-val';
+      if (plan.startsWith('[]'))     cls += ' empty';
+      if (plan.startsWith('Aucun'))  cls += ' waiting';
+      return `
+        <div class="plan-row">
+          <div class="plan-agent">${agent}</div>
+          <div class="${cls}">${escHtml(plan)}</div>
+        </div>`;
+    }).join('');
+    sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function warnCoord(input, min, max) {
+  const v = parseFloat(input.value);
+  if (!isNaN(v) && (v < min || v > max)) {
+    input.style.borderColor = '#E8A000';
+    input.title = `⚠ Hors zone Lotusim (${min}–${max}) — le spawn sera ignoré`;
+  } else {
+    input.style.borderColor = '';
+    input.title = '';
+  }
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>

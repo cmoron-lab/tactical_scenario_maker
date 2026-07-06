@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""
-HTN - agents autonomes avec surveillance réactive et interception.
-"""
 import csv
-import math
 import os
+import sys
 import time
 import threading
 from datetime import datetime, timezone
@@ -14,17 +11,12 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from lotusim_msgs.msg import VesselPositionArray
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Utilitaires ───────────────────────────────────────────────────────────────
 
 _ros_node = None
 _pose_log = None
 _waypoint_log = None
 _waypoint_log_lock = threading.Lock()
-
-DETECTION_RADIUS_DEG = 0.003
-MIN_MOVE_DEG = 0.0003  # ~30m : seuil avant de renvoyer un waypoint à suivre
-
-# ── Fonctions utilitaires ─────────────────────────────────────────────────────
 
 def _ts():
     return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
@@ -39,14 +31,9 @@ def init_logs():
     _pose_log.writerow(['timestamp', 'agent', 'lat', 'lon'])
     _waypoint_log[0].writerow(['timestamp', 'agent', 'lat', 'lon'])
 
-def in_zone(center, pos, radius):
-    return math.hypot(center['lat'] - pos['lat'], center['lon'] - pos['lon']) < radius
-
 # ── PoseTracker ───────────────────────────────────────────────────────────────
 
 class PoseTracker:
-    """Source de vérité pour les positions, mise à jour par ROS."""
-
     def __init__(self):
         self._data = {}
         self._lock = threading.Lock()
@@ -58,10 +45,7 @@ class PoseTracker:
         ts = _ts()
         with self._lock:
             for v in msg.vessels:
-                self._data[v.vessel_name] = {
-                    'lat': v.geo_point.latitude,
-                    'lon': v.geo_point.longitude,
-                }
+                self._data[v.vessel_name] = {'lat': v.geo_point.latitude, 'lon': v.geo_point.longitude}
                 if _pose_log:
                     _pose_log.writerow([ts, v.vessel_name, v.geo_point.latitude, v.geo_point.longitude])
 
@@ -71,48 +55,75 @@ class PoseTracker:
 
 tracker = PoseTracker()
 
-# ── Utilitaire futures ────────────────────────────────────────────────────────
-
 def _wait(fut, timeout=10.0):
     done = threading.Event()
     fut.add_done_callback(lambda _: done.set())
     done.wait(timeout=timeout)
 
-# ── HTN domain ────────────────────────────────────────────────────────────────
+# ── Domaine HTN ───────────────────────────────────────────────────────────────
 
 gtpyhop.Domain('htn_v1')
 
-_last_sent = {}  # agent -> (lat, lon) du dernier waypoint envoyé
-
-# garantit que "import main" depuis bdd/ retrouve CE module même quand lancé comme __main__
 import sys as _sys; _sys.modules.setdefault('main', _sys.modules[__name__])
 
-# imports après définition des globals pour éviter les imports circulaires
-from bdd.events import EventChecker             
-from bdd.primitives_actions import spawn_vessel 
-import bdd.tasks_methods                        
-from scenarios.scenario_1 import AGENTS         
+from bdd.events import EventChecker
+from bdd.primitives_actions import spawn_vessel
+import bdd.tasks_methods
+from bdd.utils import in_zone, DETECTION_RADIUS_DEG
+
+_scenario_name = sys.argv[1] if len(sys.argv) > 1 else 'scenario_1'
+import importlib
+AGENTS = importlib.import_module(f'scenarios.{_scenario_name}').AGENTS
+
+# ── Mise à jour du state depuis le tracker ────────────────────────────────────
+
+def _update_state_from_tracker(state):
+    # Mise à jour positions + historique
+    for name in state.agents:
+        pos = tracker.get(name)
+        if pos:
+            old = state.agents[name].get('pos')
+            if old and (old['lat'] != pos['lat'] or old['lon'] != pos['lon']):
+                hist = state.position_history.setdefault(name, [])
+                hist.append(old)
+                state.position_history[name] = hist[-5:]
+            state.agents[name]['pos'] = pos
+
+    # Calcul automatique de intruder_nearby pour chaque agent non-intruder
+    threats = [n for n in state.agents if 'intru' in n]
+    for name in state.agents:
+        if name in threats:
+            continue
+        agent_pos = state.agents[name].get('pos')
+        nearby = any(
+            agent_pos and state.agents[t].get('pos') and
+            in_zone(agent_pos, state.agents[t]['pos'], DETECTION_RADIUS_DEG)
+            for t in threats
+        )
+        state.agents[name]['intruder_nearby'] = nearby
+
+# ── Exécution de plan ─────────────────────────────────────────────────────────
+
+def _execute_plan(plan, state):
+    for action in plan:
+        cmd_fn = gtpyhop.current_domain._command_dict.get('c_' + action[0])
+        if cmd_fn is None:
+            cmd_fn = gtpyhop.current_domain._action_dict.get(action[0])
+        if cmd_fn:
+            cmd_fn(state, *action[1:])
 
 # ── Boucle agent ──────────────────────────────────────────────────────────────
 
-def run_agent(name, mission, state, node):
-    current = mission
-    while rclpy.ok() and current is not None:
-        for event_name, next_mission in current.get('on_interrupt', {}).items():
-            fn = getattr(EventChecker, event_name, None)
-            if fn and fn():
-                node.get_logger().info(f"[{name}] '{event_name}' → {next_mission['task']}")
-                current = next_mission
-                break
+def run_agent(name, task, state, node):
+    while rclpy.ok():
+        _update_state_from_tracker(state)
+        plan = gtpyhop.find_plan(state, [task])
+        if plan is not False and plan:
+            node.get_logger().info(f'[{name}] exécute plan: {[a[0] for a in plan]}')
+            _execute_plan(plan, state)
+            time.sleep(2.0)
         else:
-            plan = gtpyhop.find_plan(state, [current['task']])
-            if plan:
-                if current.get('loop_interval'):
-                    time.sleep(current['loop_interval'])
-                else:
-                    current = current.get('on_complete')
-            else:
-                time.sleep(1.0)
+            time.sleep(1.0)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -130,17 +141,32 @@ def main():
         gtpyhop.verbose = 0
         state = gtpyhop.State('initial_state')
         state.agents = {
-            name: {'x': info['x'], 'y': info['y'], 'model': info['model']}
+            name: {
+                'pos':             {'lat': info['x'], 'lon': info['y']},
+                'drone_available': info.get('equipement', {}).get('drone', False),
+                'weather':         info.get('equipement', {}).get('weather'),
+                'available':       True,
+                'intruder_nearby': False,
+                'last_waypoint':   None,
+            }
             for name, info in AGENTS.items()
         }
+        state.orders = {}
+        state.position_history = {}
+
+        # Calcul du plan HTN au démarrage (positions initiales connues)
+        node.get_logger().info(f'[HTN] Scénario : {_scenario_name}')
+        for name, info in AGENTS.items():
+            plan = gtpyhop.find_plan(state, [info['mission']])
+            node.get_logger().info(f'[HTN] {name}: {plan}')
 
         init_logs()
         tracker.start(node)
 
         for name, info in AGENTS.items():
             spawn_vessel(node, name, (info['x'], info['y']), info['model'],
-            info.get('linear_velocities_limits', (0, 5)),
-            info.get('angular_velocities_limits', 0.05))
+                         info.get('linear_velocities_limits', (0, 5)),
+                         info.get('angular_velocities_limits', 0.05))
             time.sleep(3.0)
 
         threads = [

@@ -1,10 +1,11 @@
-class EventChecker:
-    """Bibliothèque de conditions d'événements. Chaque @staticmethod retourne un bool."""
+from bdd.utils import in_zone, DETECTION_RADIUS_DEG
 
+
+class EventChecker:
     @staticmethod
-    def intruder_detected():
-        import main
-        a, b = main.tracker.get('usv'), main.tracker.get('intru')
+    def intruder_detected(state):
+        a = state.agents.get('usv', {}).get('pos')
+        b = state.agents.get('intru', {}).get('pos')
         if a is None or b is None:
             return False
-        return main.in_zone(a, b, main.DETECTION_RADIUS_DEG)
+        return in_zone(a, b, DETECTION_RADIUS_DEG)

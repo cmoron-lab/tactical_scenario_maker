@@ -1,13 +1,13 @@
 import gtpyhop
-from rclpy.action import ActionClient
-from geographic_msgs.msg import GeoPoint
-from lotusim_msgs.msg import MASCmd as MASCmdMsg
-from lotusim_msgs.action import MASCmd
-from lotusim_msgs.srv import SetWaypoints
 
 
 def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angular_velocities_limits):
+    from rclpy.action import ActionClient
+    from geographic_msgs.msg import GeoPoint
+    from lotusim_msgs.msg import MASCmd as MASCmdMsg
+    from lotusim_msgs.action import MASCmd
     import main
+
     spawn = ActionClient(node, MASCmd, "/lotusim/mas_cmd")
     spawn.wait_for_server()
 
@@ -28,10 +28,8 @@ def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angula
             </waypoint_follower>
         </lotus_param>
     """
-
     goal = MASCmd.Goal()
     goal.cmd = cmd
-
     fut = spawn.send_goal_async(goal)
     main._wait(fut, timeout=10.0)
     if not fut.done() or fut.result() is None:
@@ -44,15 +42,24 @@ def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angula
 
 
 def send_mas_cmd(state, agent, pos):
+    """Action pure : met à jour le state (simulation, pas de ROS)."""
+    state.agents[agent]['pos'] = {'lat': pos[0], 'lon': pos[1]}
+    state.agents[agent]['last_waypoint'] = pos
+    return state
+
+
+def c_send_mas_cmd(state, agent, pos):
+    """Command : envoie le waypoint ROS et met à jour le state."""
+    from geographic_msgs.msg import GeoPoint
+    from lotusim_msgs.srv import SetWaypoints
     import main
+
     node = main._ros_node
     cli = node.create_client(SetWaypoints, f"/lotusim/{agent}/waypoints")
     cli.wait_for_service()
-
     req = SetWaypoints.Request()
     req.path = [GeoPoint(latitude=pos[0], longitude=pos[1], altitude=0.0)]
     req.loop = False
-
     fut = cli.call_async(req)
     main._wait(fut)
     node.get_logger().info(f"[{agent}] → ({pos[0]:.5f}, {pos[1]:.5f})")
@@ -61,9 +68,10 @@ def send_mas_cmd(state, agent, pos):
             main._waypoint_log[0].writerow([main._ts(), agent, pos[0], pos[1]])
             main._waypoint_log[1].flush()
 
-    state.agents[agent]['x'] = pos[0]
-    state.agents[agent]['y'] = pos[1]
+    state.agents[agent]['pos'] = {'lat': pos[0], 'lon': pos[1]}
+    state.agents[agent]['last_waypoint'] = pos
     return state
 
 
 gtpyhop.declare_actions(send_mas_cmd)
+gtpyhop.declare_commands(c_send_mas_cmd)
