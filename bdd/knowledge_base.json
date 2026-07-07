@@ -12,7 +12,7 @@
       "label": "Veille passive",
       "methods": [
         {
-          "name": "Attente en position (aucune action nécessaire)",
+          "name": "Attente en position (aucune action n\u00e9cessaire)",
           "preconditions": [],
           "subtasks": []
         }
@@ -22,7 +22,7 @@
       "label": "Naviguer vers la position de base",
       "methods": [
         {
-          "name": "Déplacement vers la position de base",
+          "name": "D\u00e9placement vers la position de base",
           "preconditions": [],
           "subtasks": [
             {
@@ -37,7 +37,7 @@
       ]
     },
     "rentrer_a_la_base": {
-      "label": "Rentrer à la base",
+      "label": "Rentrer \u00e0 la base",
       "methods": [
         {
           "name": "Retour vers la base",
@@ -54,10 +54,10 @@
       ]
     },
     "suivre_agent": {
-      "label": "Suivre un agent (retour base une fois à portée)",
+      "label": "Suivre un agent (retour base une fois \u00e0 port\u00e9e)",
       "methods": [
         {
-          "name": "Cible à portée (<500m) — retour base",
+          "name": "Cible \u00e0 port\u00e9e (<500m) \u2014 retour base",
           "preconditions": [
             {
               "type": "distance_below",
@@ -93,7 +93,7 @@
       "label": "Reconnaissance : drone si disponible, sinon suivi direct",
       "methods": [
         {
-          "name": "Drone disponible — déploiement",
+          "name": "Drone disponible \u2014 d\u00e9ploiement",
           "preconditions": [
             {
               "type": "state_equals",
@@ -111,7 +111,7 @@
           ]
         },
         {
-          "name": "Sans drone — suivi",
+          "name": "Sans drone \u2014 suivi",
           "preconditions": [],
           "subtasks": [
             {
@@ -125,10 +125,10 @@
       ]
     },
     "deploiement_drone": {
-      "label": "Déployer le drone compagnon",
+      "label": "D\u00e9ployer le drone compagnon",
       "methods": [
         {
-          "name": "Déploiement (activation du compagnon pré-déclaré)",
+          "name": "D\u00e9ploiement (activation du compagnon pr\u00e9-d\u00e9clar\u00e9)",
           "preconditions": [],
           "subtasks": [
             {
@@ -143,10 +143,10 @@
       ]
     },
     "surveiller_zone": {
-      "label": "Surveiller une zone (position + diamètre indépendants, via __zone__)",
+      "label": "Surveiller une zone (position + diam\u00e8tre ind\u00e9pendants, via __zone__)",
       "methods": [
         {
-          "name": "Pas encore dans la zone — s'y rendre",
+          "name": "Pas encore dans la zone \u2014 s'y rendre",
           "preconditions": [
             {
               "type": "distance_above",
@@ -165,7 +165,7 @@
           ]
         },
         {
-          "name": "Contact dans la zone — reconnaissance",
+          "name": "Contact dans la zone \u2014 reconnaissance",
           "preconditions": [
             {
               "type": "distance_below",
@@ -183,13 +183,49 @@
           ]
         },
         {
-          "name": "Rien dans la zone — veille",
+          "name": "Rien dans la zone \u2014 veille",
           "preconditions": [],
           "subtasks": [
             {
               "task": "veiller",
               "args": [
                 "__self__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "eviter": {
+      "label": "\u00c9viter un autre agent (approche, puis demi-tour une fois trop proche)",
+      "methods": [
+        {
+          "name": "Trop proche (<1km) \u2014 demi-tour vers la base",
+          "preconditions": [
+            {
+              "type": "distance_below",
+              "target": "__cible__",
+              "threshold": 0.01
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "rentrer_a_la_base",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Hors de port\u00e9e \u2014 approche",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "aller_a_agent",
+              "args": [
+                "__self__",
+                "__cible__"
               ]
             }
           ]
@@ -213,7 +249,7 @@
       ]
     },
     "aller_a_position": {
-      "label": "Aller vers une position (fixe ou résolue : base/destination)",
+      "label": "Aller vers une position (fixe ou r\u00e9solue : base/destination)",
       "args": [
         "agent",
         "position"
@@ -227,7 +263,7 @@
       ]
     },
     "creation_agent": {
-      "label": "Activer le drone compagnon (marqueur d'état)",
+      "label": "Activer le drone compagnon (marqueur d'\u00e9tat)",
       "args": [
         "agent",
         "agent"
@@ -236,7 +272,7 @@
   },
   "primitive_actions": {
     "aller_a": "Envoyer waypoint (ROS)",
-    "creation_agent": "Activer le drone compagnon (marqueur d'état, pas un vrai spawn ROS)",
+    "creation_agent": "Activer le drone compagnon (marqueur d'\u00e9tat, pas un vrai spawn ROS)",
     "spawn_vessel": "Spawner un agent (ROS)"
   }
 }

@@ -1381,7 +1381,15 @@ function buildCard(name, a = {}) {
   // this explicitly, synchronously, right after append (see renderEditor/addAgent)
   // removes that timing gap entirely.
   div._finalizeCard = () => {
-    updateExtra(name, parsed.task, parsed.extra);
+    // skipDeps: true — this runs once per card while renderEditor()/addAgent() are
+    // still attaching the OTHER cards to the DOM, so a dependency dropdown (e.g.
+    // "Agent «drone»") built right now wouldn't see every candidate agent yet.
+    // The caller does one complete refreshAllMissionDeps() itself once every card
+    // in the batch is attached — building it here too would render it prematurely
+    // with an incomplete agent list, and that empty/wrong selection would then be
+    // (wrongly) treated as "the live value to preserve" on every later re-render,
+    // permanently hiding the value this scenario was actually saved with.
+    updateExtra(name, parsed.task, parsed.extra, { skipDeps: true });
     updateConditions(name, parsed.task, initConds);
   };
   return div;
@@ -1392,7 +1400,7 @@ function parseMission(str) {
   return { task: p[0] || 'veiller', extra: p.slice(2) };
 }
 
-function updateExtra(agentName, task, init = []) {
+function updateExtra(agentName, task, init = [], { skipDeps = false } = {}) {
   const el = document.getElementById(`mex-${agentName}`);
   if (!el) return;
   const type = getTaskMeta(task).extra || 'none';
@@ -1421,7 +1429,7 @@ function updateExtra(agentName, task, init = []) {
 
   // When task changes via dropdown (not on init), reset conditions
   if (init.length === 0) updateConditions(agentName, task, {});
-  refreshAllMissionDeps();
+  if (!skipDeps) refreshAllMissionDeps();
 }
 
 function addAgent() {
@@ -2543,8 +2551,8 @@ function importGeneratedScenario() {
 
   // Build mission string: first item of the array (e.g. "encircle_target __self__")
   const missionStr = Array.isArray(scenario.mission)
-    ? (scenario.mission[0] || 'veille __self__')
-    : (scenario.mission || 'veille __self__');
+    ? (scenario.mission[0] || 'veiller __self__')
+    : (scenario.mission || 'veiller __self__');
 
   // Prepare agents for import
   const agents = {};

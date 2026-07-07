@@ -57,12 +57,17 @@ _TOP_LEVEL_MISSIONS = {
                         "apparaît dans la zone, sinon veille. Nécessite un agent role:\"zone\".",
     "deploiement_drone": "Déploie directement le drone compagnon (rarement utilisé seul — "
                           "\"reconnaissance\" s'en charge déjà automatiquement).",
+    "eviter": "S'approche de la cible puis, une fois trop proche (~1km), fait demi-tour vers sa "
+              "base. Pour un évitement mutuel entre deux agents ordinaires, assigner \"eviter\" "
+              "aux deux, chacun ayant l'autre comme \"cible\" (conditions.cible) — contrairement à "
+              "\"suivre_agent\", ne nécessite PAS un agent role:\"intruder\".",
 }
 
 _MISSION_KEYWORDS = [
     'patrouil', 'patrol', 'surveill', 'garde', 'guard', 'chasse', 'chase', 'base',
     'defend', 'defen', 'suivre', 'follow', 'poursuit', 'pursue', 'zone', 'secteur',
-    'drone', 'reconnaissance', 'recon', 'rentr', 'retour', 'return',
+    'drone', 'reconnaissance', 'recon', 'rentr', 'retour', 'return', 'eviter', 'evite',
+    'avoid', 'demi-tour', 'demi tour', 'recule', 'reculer',
 ]
 
 
@@ -272,12 +277,24 @@ def _is_auxiliary_agent(agent_data: Dict[str, Any]) -> bool:
     return _is_intruder_agent(agent_data) or _is_drone_agent(agent_data) or _is_zone_agent(agent_data)
 
 
-def _normalize_mission(value: Any) -> Optional[str]:
-    """Keep only the top-level task name if the LLM gave a full mission string."""
+def _normalize_mission(value: Any, extra_valid_tasks: Optional[set] = None) -> Optional[str]:
+    """
+    Keep only the top-level task name if the LLM gave a full mission string —
+    valid if it's one of the 6 built-in missions, OR (extra_valid_tasks) one of
+    THIS SAME response's own "suggested_methods" task names (rule 10 in the
+    prompt explicitly tells the LLM to assign the new task as the agent's
+    mission directly; rejecting anything outside the fixed 6 would silently
+    discard that and downgrade the agent to "veiller" even when the LLM did
+    exactly what was asked).
+    """
     if not isinstance(value, str) or not value.strip():
         return None
     task_name = value.strip().split()[0]
-    return task_name if task_name in _TOP_LEVEL_MISSIONS else None
+    if task_name in _TOP_LEVEL_MISSIONS:
+        return task_name
+    if extra_valid_tasks and task_name in extra_valid_tasks:
+        return task_name
+    return None
 
 
 # ── Prompt construction & LLM parsing ─────────────────────────────────────────
@@ -360,6 +377,9 @@ Rules (follow strictly):
      not try to encode a custom radius.)
    - "suivre_agent" and "reconnaissance" both require at least one "intruder" agent to exist in
      the scenario (see rule 3) — do not assign either mission if there is no cible to track.
+   - "eviter" does NOT need an "intruder" agent — it tracks whichever other agent is nearest by
+     default. For MUTUAL avoidance between two ordinary agents (no intruder in the description at
+     all), assign "eviter" to both.
 5. "conditions" is a free per-agent state dict — for acting agents, leave it {{}} empty UNLESS
    rule 4 says to set "drone_available".
 6. Give each agent a unique x/y position (lat 1.25-1.30, lon 103.74-103.80).
@@ -427,6 +447,13 @@ def _parse_scenario_from_description(
         agents = parsed.get("agents") or []
         acting = [a for a in agents if not _is_auxiliary_agent(a)]
         intruders = [a for a in agents if _is_intruder_agent(a)]
+        # Task names THIS SAME response also defines via "suggested_methods" (rule 10) —
+        # a valid mission target even though it's not one of the 6 built-ins.
+        suggested_task_names = {
+            s.get('task', '').strip()
+            for s in (parsed.get('suggested_methods') or [])
+            if isinstance(s, dict) and s.get('task', '').strip()
+        }
 
         count_wrong = expected_count is not None and len(acting) != expected_count
         intruder_count_wrong = intruder_count > 0 and len(intruders) != intruder_count
@@ -434,7 +461,7 @@ def _parse_scenario_from_description(
             _is_drone_agent(a) and not intruders for a in agents
         )
         bad_mission = any(
-            not _is_auxiliary_agent(a) and _normalize_mission(a.get('mission')) is None
+            not _is_auxiliary_agent(a) and _normalize_mission(a.get('mission'), suggested_task_names) is None
             for a in acting
         )
 
@@ -457,10 +484,12 @@ def _parse_scenario_from_description(
                     "it to track — add one, or remove the drone agent"
                 )
             if bad_mission:
+                allowed = list(_TOP_LEVEL_MISSIONS) + sorted(suggested_task_names)
                 problems.append(
                     f"every acting agent's \"mission\" must be exactly one of "
-                    f"{list(_TOP_LEVEL_MISSIONS)} followed by \" __self__\" — fix any agent "
-                    f"whose mission doesn't match"
+                    f"{allowed} followed by \" __self__\" — fix any agent whose mission "
+                    f"doesn't match (a name from your own \"suggested_methods\" is fine too, "
+                    f"as long as it's spelled exactly the same)"
                 )
             feedback = "; ".join(problems) + ". Regenerate the full JSON now with the exact counts stated above."
             continue
@@ -542,10 +571,12 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
         tasks = kb.setdefault("tasks", {})
         is_new_task = task_name not in tasks
 
+        # A task only ever has "label"/"methods" — "preconditions"/"subtasks" belong
+        # to each individual method, never the task itself (matches the schema
+        # bdd/tasks_methods.py::load_kb() actually reads).
         task_def = tasks.setdefault(task_name, {
             "label": suggestion.get("description", task_name),
             "methods": [],
-            "subtasks": suggestion.get("subtasks", [])
         })
 
         if is_new_task:
@@ -561,9 +592,6 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
 
         if not task_def.get("label"):
             task_def["label"] = suggestion.get("description", task_name)
-
-        if not task_def.get("subtasks"):
-            task_def["subtasks"] = suggestion.get("subtasks", [])
 
     return updates
 
@@ -602,6 +630,15 @@ def generate_scenario_from_description(
 
         parsed, retry_warnings = _parse_scenario_from_description(description)
         warnings.extend(retry_warnings)
+
+        # Task names this response also defines via "suggested_methods" — a valid
+        # mission target for an acting agent, in addition to the 6 built-ins
+        # (see _normalize_mission).
+        suggested_task_names = {
+            s.get('task', '').strip()
+            for s in (parsed.get('suggested_methods') or [])
+            if isinstance(s, dict) and s.get('task', '').strip()
+        }
 
         if parsed.get("cannot_model"):
             reason = parsed.get("reason") or "Le modèle n'a pas précisé la raison."
@@ -692,12 +729,31 @@ def generate_scenario_from_description(
                 agent_entry["mission"] = "suivre_agent __self__"
                 agent_entry["resolved_task"] = ["suivre_agent"]
             else:
-                mission_task = _normalize_mission(agent_data.get("mission")) or "veiller"
+                mission_task = _normalize_mission(agent_data.get("mission"), suggested_task_names) or "veiller"
                 agent_entry["mission"] = f"{mission_task} __self__"
                 agent_entry["resolved_task"] = [mission_task]
 
             agents[name] = agent_entry
             _ensure_agent_exists(kb, name, role)
+
+        # Pre-fill explicit "__cible__"/"__drone__"/"__zone__" resolution whenever
+        # unambiguous (exactly one candidate) — left unset, the automatic
+        # nearest-agent fallback (bdd/tasks_methods.py::_find_agent_by_pattern) can
+        # latch onto an unrelated nearby agent (e.g. a drone's own companion patrol)
+        # purely because of proximity, instead of the intended target. With more
+        # than one candidate of a given role, the pairing is genuinely ambiguous
+        # from the description alone, so it's left to the automatic resolver.
+        intruder_names = [n for n, a in agents.items() if a['role'] == 'intruder']
+        drone_names = [n for n, a in agents.items() if a['role'] == 'drone']
+        zone_names = [n for n, a in agents.items() if a['role'] == 'zone']
+        for a in agents.values():
+            mission_task = (a.get('resolved_task') or [None])[0]
+            if mission_task in ('suivre_agent', 'reconnaissance') and len(intruder_names) == 1:
+                a['conditions'].setdefault('cible', intruder_names[0])
+            if mission_task in ('reconnaissance', 'deploiement_drone') and len(drone_names) == 1:
+                a['conditions'].setdefault('drone', drone_names[0])
+            if mission_task == 'surveiller_zone' and len(zone_names) == 1:
+                a['conditions'].setdefault('zone', zone_names[0])
 
         # Enrich KB with new methods/tasks
         kb_updates = _enrich_kb_with_methods(kb, parsed)
