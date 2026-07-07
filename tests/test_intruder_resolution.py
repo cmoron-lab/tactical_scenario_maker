@@ -29,6 +29,18 @@ class IntruderResolutionTests(unittest.TestCase):
 
         self.assertEqual(resolved, 'dock')
 
+    def test_resolve_any_picks_nearest_other_agent(self):
+        state = type('State', (), {})()
+        state.agents = {
+            'agent1':   {'pos': {'lat': 1.26, 'lon': 103.75}},
+            'far_boat': {'pos': {'lat': 1.40, 'lon': 103.90}},
+            'near_boat':{'pos': {'lat': 1.261, 'lon': 103.751}},
+        }
+
+        resolved = tasks_methods._resolve('__any__', 'agent1', state)
+
+        self.assertEqual(resolved, 'near_boat')
+
 
 if __name__ == '__main__':
     unittest.main()

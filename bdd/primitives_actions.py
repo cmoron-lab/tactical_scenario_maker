@@ -79,5 +79,30 @@ def c_aller_a(state, agent, pos):
     return state
 
 
-gtpyhop.declare_actions(aller_a)
+def creation_agent(state, agent, drone):
+    """
+    Marks that `agent` has activated its companion drone `drone`.
+
+    NOTE — this does NOT spawn a new ROS entity. In this architecture the
+    companion (e.g. a drone) is pre-declared in the scenario from the start,
+    with its own standing mission (typically "suivre_agent __self__") —
+    because main.py runs exactly one planning thread per agent, fixed at
+    startup from the scenario file; there is currently no mechanism to spawn a
+    brand-new ROS entity *and* its own planning thread mid-plan. This action is
+    the hook to extend later if true runtime spawning is built (it would call
+    spawn_vessel() here instead of just setting a flag).
+
+    `drone` is resolved from the "__drone__" token (bdd/tasks_methods.py) —
+    either an explicit per-agent override (scenario editor's "Agent «drone»"
+    dropdown) or, absent that, whichever agent carries role/kind "drone" or a
+    truthy "is_drone" condition.
+    """
+    state.agents[agent]['drone_deployed'] = True
+    state.agents[agent]['deployed_drone'] = drone
+    if drone in state.agents:
+        state.agents[drone]['drone_deployed'] = True
+    return state
+
+
+gtpyhop.declare_actions(aller_a, creation_agent)
 gtpyhop.declare_commands(c_aller_a)

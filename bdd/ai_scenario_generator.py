@@ -27,42 +27,54 @@ _INTRUDER_KEYWORDS = [
     'envahisseur', 'hostile', 'intruder', 'enemy', 'target', 'threat', 'trespasser',
 ]
 _NEGATION_WORDS = r'\b(?:pas|aucun\w*|sans|jamais|ni|no|not|without|never|none)\b'
-_ENCIRCLE_ROLE_HINTS = {
-    'blockade': ['bloque', 'blocage', 'devant', 'avant', 'front', 'block'],
-    'flank': ['flanc', 'côté', 'cote', 'flank', 'side'],
-    'rear_guard': ['derrière', 'derriere', 'arrière', 'arriere', 'rear', 'behind'],
-}
 
 DEFAULT_MODEL = 'wamv'
 # Spawnable vessel models (src/LOTUSim/assets/models/) — "landscape" and "seabed"
-# are environment assets, not agents, so they're excluded on purpose.
+# are environment assets, not agents, so they're excluded on purpose. "cube" is
+# used as a plain landmark model (e.g. a "__zone__" marker with no motion).
 VALID_MODELS = {
     'wamv', 'fremm', 'pha', 'bluerov2_heavy', 'lrauv', 'x500', 'x500_base',
     'commando', 'dtmb_hull', 'mine', 'cube',
 }
 
+# Valid LOTUSim world zone (also documented in the prompt) — the LLM occasionally
+# hallucinates a coordinate way outside this box (e.g. lat 4.89 instead of ~1.26),
+# so every position is clamped into it rather than trusted verbatim.
+LAT_RANGE = (1.20, 1.35)
+LON_RANGE = (103.70, 103.85)
+
+# The only top-level missions an acting agent can be assigned directly — every
+# other task in knowledge_base.json (naviguer_vers_base, aller_a_agent, etc.) is
+# an internal building block, not a meaningful scenario-level mission on its own.
+_TOP_LEVEL_MISSIONS = {
+    "veiller": "Veille passive, aucune action particulière.",
+    "rentrer_a_la_base": "Retourne immédiatement à sa base.",
+    "suivre_agent": "Suit/poursuit la cible ; rentre à la base une fois à moins de ~500m d'elle. "
+                     "Nécessite un agent \"cible\" (role: \"intruder\") ailleurs dans le scénario.",
+    "reconnaissance": "Identique à \"suivre_agent\", mais délègue à un drone compagnon si "
+                       "conditions.drone_available=true et qu'un agent role:\"drone\" existe.",
+    "surveiller_zone": "Se rend au centre d'une zone puis réagit (reconnaissance) si un contact "
+                        "apparaît dans la zone, sinon veille. Nécessite un agent role:\"zone\".",
+    "deploiement_drone": "Déploie directement le drone compagnon (rarement utilisé seul — "
+                          "\"reconnaissance\" s'en charge déjà automatiquement).",
+}
+
+_MISSION_KEYWORDS = [
+    'patrouil', 'patrol', 'surveill', 'garde', 'guard', 'chasse', 'chase', 'base',
+    'defend', 'defen', 'suivre', 'follow', 'poursuit', 'pursue', 'zone', 'secteur',
+    'drone', 'reconnaissance', 'recon', 'rentr', 'retour', 'return',
+]
+
+
+def _clamp_coord(value: Tuple[float, float]) -> Tuple[float, float]:
+    lat = max(LAT_RANGE[0], min(LAT_RANGE[1], value[0]))
+    lon = max(LON_RANGE[0], min(LON_RANGE[1], value[1]))
+    return lat, lon
+
 
 def _normalize_model(value: Any) -> str:
     key = str(value or '').strip().lower()
     return key if key in VALID_MODELS else DEFAULT_MODEL
-
-# Default KB structure for new items
-DEFAULT_TASK_TEMPLATE = {
-    "label": "",
-    "subtasks": [],
-    "methods": []
-}
-
-DEFAULT_METHOD_TEMPLATE = {
-    "name": "",
-    "preconditions": [],
-    "subtasks": []
-}
-
-DEFAULT_LEAF_TASK = {
-    "label": "",
-    "type": "leaf"
-}
 
 
 def _query_ollama(prompt: str, model: str = "mistral") -> str:
@@ -104,7 +116,6 @@ def _load_kb() -> Dict[str, Any]:
         "tasks": {},
         "leaf_tasks": {},
         "resolve_tokens": {},
-        "event_triggers": []
     }
 
 
@@ -216,13 +227,6 @@ def _expected_intruder_count(description: str) -> int:
     return 1
 
 
-_MISSION_KEYWORDS = [
-    'patrouil', 'patrol', 'encercl', 'encircle', 'intercept', 'proteg', 'protect',
-    'surveill', 'garde', 'guard', 'chasse', 'chase', 'base', 'defend', 'defen',
-    'escort', 'suivre', 'follow', 'bloqu', 'block', 'flanc', 'flank',
-]
-
-
 def _strip_accents(text: str) -> str:
     return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
 
@@ -245,105 +249,67 @@ def _has_actionable_signal(description: str) -> bool:
     return any(kw in text for kw in _MISSION_KEYWORDS)
 
 
-def _guess_encircle_role(description: str, index: int, used_roles: List[str]) -> Optional[str]:
-    """Guess an agent's encircle role from positional wording, falling back to index order."""
-    text = description.lower()
-    for role, hints in _ENCIRCLE_ROLE_HINTS.items():
-        if role not in used_roles and any(h in text for h in hints):
-            return role
-    order = ['blockade', 'flank', 'rear_guard']
-    for role in order:
-        if role not in used_roles:
-            return role
-    return None
-
-
 def _is_intruder_agent(agent_data: Dict[str, Any]) -> bool:
     role = str(agent_data.get('role', '')).strip().lower()
     conditions = agent_data.get('conditions', {}) or {}
     return role == 'intruder' or bool(conditions.get('is_intruder'))
 
 
-_ROLE_ALIASES = {
-    'blockade': 'blockade', 'block': 'blockade', 'front': 'blockade', 'blocking': 'blockade',
-    'flank': 'flank', 'flanking': 'flank', 'side': 'flank',
-    'rear_guard': 'rear_guard', 'rear': 'rear_guard', 'rear_blockade': 'rear_guard',
-    'behind': 'rear_guard', 'back': 'rear_guard',
-}
+def _is_drone_agent(agent_data: Dict[str, Any]) -> bool:
+    """A companion drone that tracks the cible on its own (mission "suivre_agent")."""
+    return str(agent_data.get('role', '')).strip().lower() == 'drone'
 
 
-def _normalize_encircle_role(value: Any) -> Optional[str]:
-    if not value:
+def _is_zone_agent(agent_data: Dict[str, Any]) -> bool:
+    """A "__zone__" landmark — a fixed position + radius, not a moving contact."""
+    role = str(agent_data.get('role', '')).strip().lower()
+    conditions = agent_data.get('conditions', {}) or {}
+    return role == 'zone' or bool(conditions.get('is_zone'))
+
+
+def _is_auxiliary_agent(agent_data: Dict[str, Any]) -> bool:
+    """True for agents that don't count toward the user-requested acting-agent count."""
+    return _is_intruder_agent(agent_data) or _is_drone_agent(agent_data) or _is_zone_agent(agent_data)
+
+
+def _normalize_mission(value: Any) -> Optional[str]:
+    """Keep only the top-level task name if the LLM gave a full mission string."""
+    if not isinstance(value, str) or not value.strip():
         return None
-    return _ROLE_ALIASES.get(str(value).strip().lower())
-
-
-def _is_encircler(agent_data: Dict[str, Any]) -> bool:
-    return str((agent_data.get('conditions') or {}).get('role_tactique', '')).strip().lower() == 'encercleur'
-
-
-def _count_distinct_position_hints(description: str) -> int:
-    """How many distinct encircling positions (front/flank/rear) the text mentions."""
-    text = description.lower()
-    return sum(1 for hints in _ENCIRCLE_ROLE_HINTS.values() if any(h in text for h in hints))
-
-
-def _fix_encircle_roles(agents_raw: List[Dict[str, Any]], description: str) -> None:
-    """Ensure agents with role_tactique="encercleur" get a unique, valid encircle_role."""
-    encircle_agents = [a for a in agents_raw if not _is_intruder_agent(a) and _is_encircler(a)]
-    if not encircle_agents:
-        return
-
-    used: List[str] = []
-    for a in encircle_agents:
-        cond = a.setdefault('conditions', {})
-        role = _normalize_encircle_role(cond.get('encircle_role'))
-        if role and role not in used:
-            cond['encircle_role'] = role
-            used.append(role)
-        else:
-            cond.pop('encircle_role', None)
-
-    for a in encircle_agents:
-        cond = a.setdefault('conditions', {})
-        if not cond.get('encircle_role'):
-            guessed = _guess_encircle_role(description, 0, used)
-            if guessed:
-                cond['encircle_role'] = guessed
-                used.append(guessed)
+    task_name = value.strip().split()[0]
+    return task_name if task_name in _TOP_LEVEL_MISSIONS else None
 
 
 # ── Prompt construction & LLM parsing ─────────────────────────────────────────
 
-def _build_prompt(description: str, kb: Dict[str, Any], expected_count: Optional[int],
+def _build_prompt(description: str, expected_count: Optional[int],
                    intruder_count: int, feedback: Optional[str] = None) -> str:
-    existing_tasks = list(kb.get("tasks", {}).keys())
-    existing_leaf = list(kb.get("leaf_tasks", {}).keys())
-    task_labels = {k: v.get("label", k) for k, v in kb.get("tasks", {}).items()}
-    task_list_str = "\n".join(f'  - "{k}": {task_labels[k]}' for k in existing_tasks)
-    leaf_list_str = ", ".join(existing_leaf)
+    mission_list_str = "\n".join(f'  - "{k}": {v}' for k, v in _TOP_LEVEL_MISSIONS.items())
 
     count_rule = (
         f"The description clearly refers to exactly {expected_count} ACTING agent(s) "
-        f"(this does NOT include the intruder/target). You MUST output exactly "
-        f"{expected_count} agent object(s) with role != \"intruder\"."
+        f"(this does NOT include the intruder/target, any companion drone, or a zone marker). "
+        f"You MUST output exactly {expected_count} agent object(s) with role not in "
+        f"(\"intruder\", \"drone\", \"zone\")."
         if expected_count is not None else
         "Count the acting agents mentioned in the description carefully — include EVERY one, "
-        "no more, no less (do not count the intruder/target as an acting agent)."
+        "no more, no less (do not count the intruder/target, a companion drone, or a zone "
+        "marker as acting agents)."
     )
 
     if intruder_count > 0:
         intruder_rule = (
-            f"The description describes {intruder_count} intruder/target/threat agent(s) that "
-            f"the acting agents react to. You MUST add EXACTLY {intruder_count} extra agent "
+            f"The description describes {intruder_count} intruder/target/cible agent(s) that "
+            f"other agents track. You MUST add EXACTLY {intruder_count} extra agent "
             f"object(s) for them (each a separate agent, uniquely named), each with \"role\": "
             f"\"intruder\" and \"conditions\": {{\"is_intruder\": true}}. Give each its own "
-            f"\"mission\" (e.g. \"aller __self__ <lat> <lon>\") so it moves through the zone."
+            f"\"mission\" (e.g. \"aller_a_position __self__ <lat> <lon>\") so it moves through the zone, "
+            f"or \"veiller __self__\" if it stays still."
         )
     else:
         intruder_rule = (
-            "If the description implies one or more intruders/targets/threats, add one extra "
-            "agent PER threat, each with \"role\": \"intruder\" and \"conditions\": "
+            "If the description implies one or more intruders/targets/threats to track, add "
+            "one extra agent PER threat, each with \"role\": \"intruder\" and \"conditions\": "
             "{\"is_intruder\": true}."
         )
 
@@ -355,11 +321,6 @@ def _build_prompt(description: str, kb: Dict[str, Any], expected_count: Optional
 
 Scenario description: {description}
 
-REUSE these existing tasks (do not recreate them):
-{task_list_str}
-
-Available primitive subtasks: {leaf_list_str}
-
 If — and only if — the description is too vague to safely build a scenario (e.g. it gives
 no way at all to know how many agents are involved or what they should do), output instead:
 {{
@@ -367,56 +328,78 @@ no way at all to know how many agents are involved or what they should do), outp
   "clarification_questions": ["question 1 in French", "question 2 in French"]
 }}
 
-Otherwise output this exact JSON structure (this shows the SHAPE only — the agent count,
-names, roles and conditions are placeholders and must be replaced with what the actual
-description above requires):
+Otherwise output this exact JSON structure (this shows the SHAPE only — every value below is a
+placeholder to replace; do NOT copy these example values, they belong to an unrelated example scenario):
 {{
-  "scenario_name": "2_to_4_snake_case_words",
+  "scenario_name": "2_to_4_snake_case_words_describing_THIS_scenario",
   "agents": [
-    {{"name": "agent1", "role": "patrol", "x": 1.260, "y": 103.750, "model": "wamv", "heading": 0, "velocity": 3,
-      "conditions": {{"role_tactique": "encercleur", "encircle_role": "blockade"}}, "mission": "operer __self__"}},
-    {{"name": "agent2", "role": "patrol", "x": 1.265, "y": 103.755, "model": "wamv", "heading": 0, "velocity": 3,
-      "conditions": {{"patrol_active": true}}, "mission": "operer __self__"}}
+    {{"name": "<name>", "role": "patrol", "x": 1.260, "y": 103.750, "model": "wamv", "heading": 0,
+      "velocity": 3, "conditions": {{}}, "mission": "veiller __self__"}}
   ],
-  "mission": "operer __self__"
+  "mission": "veiller __self__"
 }}
 
 Rules (follow strictly):
-1. scenario_name: describe WHAT happens, not the user request. Example: "patrouille_encerclement_port".
+1. scenario_name: 2-4 snake_case words describing WHAT HAPPENS in THIS specific scenario.
 2. agents: {count_rule}
 3. {intruder_rule}
-4. mission: ALWAYS "operer __self__" for every acting agent — never any other task name.
-   "operer" is the single generic entry point; the actual tactical behavior is chosen entirely
-   through "conditions" (see rule 5). "__self__" is a placeholder for the agent's own name.
-5. "conditions" is a free per-agent state dict merged into the agent at runtime. Set it to express
-   what this agent actually does, based on what the description says — pick ONE case per agent:
-   - Distinct positions around a target (one blocks the front, one takes a flank/side, one stays
-     behind/rear) → {{"role_tactique": "encercleur", "encircle_role": "blockade"|"flank"|"rear_guard"}}
-     matching the agent's described position.
-   - Chase/pursue a target directly, no positioning → {{"role_tactique": "intercepteur"}}
-   - Watch/observe a target without intervening → {{"role_tactique": "observateur"}}
-   - Escort/protect another (non-intruder) agent → {{"soutien_requis": true}} — that other agent
-     must exist among the acting agents (do not invent one).
-   - Simple patrol/loop with no distinct roles → {{"patrol_active": true}}
-   - Ordered to return to base from the start → {{"ordre_repli": true}}
-   - Nothing else fits / passive watch only → {{}} (empty)
-   Do not combine unrelated keys (e.g. don't set both "role_tactique" and "patrol_active" on the
-   same agent unless the description genuinely describes both in sequence).
+4. mission: for EACH acting agent, pick EXACTLY ONE of these missions — never invent another
+   task name, never combine several:
+{mission_list_str}
+   "__self__" is a placeholder for the agent's own name; every mission above is written exactly
+   as "<task_name> __self__".
+   - If mission is "reconnaissance", set this agent's "conditions": {{"drone_available": true}}
+     ONLY if the description implies a companion drone should take over — and in that case ALSO
+     add a separate agent object with "role": "drone", "mission": "suivre_agent __self__", and
+     no "conditions" (it automatically tracks the same cible). If no drone is implied, omit
+     "drone_available" and this agent behaves exactly like "suivre_agent".
+   - If mission is "surveiller_zone", ALSO add a separate agent object with "role": "zone",
+     "conditions": {{"is_zone": true}}, "model": "cube", "mission": "veiller __self__", positioned
+     (x/y) at the center of the zone/area described. (The surveillance radius itself is a fixed
+     system setting, not adjustable per scenario yet — position the zone agent sensibly, but do
+     not try to encode a custom radius.)
+   - "suivre_agent" and "reconnaissance" both require at least one "intruder" agent to exist in
+     the scenario (see rule 3) — do not assign either mission if there is no cible to track.
+5. "conditions" is a free per-agent state dict — for acting agents, leave it {{}} empty UNLESS
+   rule 4 says to set "drone_available".
 6. Give each agent a unique x/y position (lat 1.25-1.30, lon 103.74-103.80).
 7. model: pick the vessel type that best matches the description, from this exact list only —
    {sorted(VALID_MODELS)}. "wamv" (surface catamaran) is the default for anything not clearly a
-   submarine/ROV (bluerov2_heavy, lrauv), a frigate (fremm), a helicopter carrier (pha), or a
-   quadcopter drone (x500, x500_base). Never invent a model name outside this list.
+   submarine/ROV (bluerov2_heavy, lrauv), a frigate (fremm), a helicopter carrier (pha), a
+   quadcopter drone (x500, x500_base), or a static landmark (cube). Never invent a model name
+   outside this list.
 8. heading: compass heading in degrees (0=East, 90=North), only if the description implies a
    direction of travel; otherwise 0.
 9. Never reuse the placeholder agent count, names, roles or coordinates verbatim — they must come
    from the actual description above.
-10. Do NOT output any text outside the JSON object.
+10. If the description asks for behavior that genuinely doesn't fit ANY mission in rule 4 — do NOT
+   force the closest-looking one — design a new task instead, via a top-level "suggested_methods"
+   array (sibling of "agents"):
+   [{{"task": "nom_de_la_tache", "description": "ce que ça fait", "preconditions": [...],
+      "subtasks": [{{"task": "...", "args": ["__self__", ...]}}]}}, ...]
+   You may add several entries (e.g. one task calling another). Every "subtasks[].task" must
+   eventually reach one of: {", ".join(_TOP_LEVEL_MISSIONS)}, aller_a_agent, aller_a_position,
+   suivre, maintenir_contact, creation_agent. Give this
+   agent's own "mission" the new task's name directly (e.g. "nom_de_la_tache __self__").
+   Preconditions can use ANY of these types:
+   - {{"type": "state_equals", "variable": "x", "value": "y"}} — a condition you set yourself on
+     this agent (in its own "conditions") equals y.
+   - {{"type": "state_below"/"state_above", "variable": "x", "value": 5}} — numeric comparison.
+   - {{"type": "state_present", "variable": "x"}} — true if "x" is set at all, any value.
+   - {{"type": "distance_below"/"distance_above", "target": "__cible__", "threshold": 0.003}} —
+     true if this agent's live distance to the resolved target is below/above threshold (degrees).
+     "target" accepts "__cible__"/"__base_location__"/"__zone__"/"__any__" or a literal agent
+     name — no separate setup needed, it's evaluated fresh every time from real positions.
+11. If you genuinely cannot model this scenario — even with a new task above, e.g. it needs a
+   capability with no matching leaf task (weapons, communications, sensors beyond distance/position,
+   etc.) — do NOT invent something wrong or approximate. Output ONLY:
+   {{"cannot_model": true, "reason": "explication concise en français de ce qui manque"}}
+12. Do NOT output any text outside the JSON object.
 {feedback_block}"""
 
 
 def _parse_scenario_from_description(
-    description: str, kb: Dict[str, Any] = None
+    description: str
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
     Parse natural language description into structured scenario, self-correcting
@@ -426,9 +409,6 @@ def _parse_scenario_from_description(
     parsed_json may contain {"needs_clarification": True, "clarification_questions": [...]}
     instead of a scenario if the description is too ambiguous.
     """
-    if kb is None:
-        kb = _load_kb()
-
     expected_count = _expected_agent_count(description)
     intruder_count = _expected_intruder_count(description)
     warnings: List[str] = []
@@ -436,25 +416,30 @@ def _parse_scenario_from_description(
     parsed: Dict[str, Any] = {}
 
     for attempt in range(MAX_RETRIES + 1):
-        prompt = _build_prompt(description, kb, expected_count, intruder_count, feedback)
+        prompt = _build_prompt(description, expected_count, intruder_count, feedback)
         response = _query_ollama(prompt, model="mistral")
         parsed = _extract_json_from_response(response)
         parsed["_raw_response"] = response
 
-        if parsed.get("needs_clarification"):
+        if parsed.get("needs_clarification") or parsed.get("cannot_model"):
             return parsed, warnings
 
         agents = parsed.get("agents") or []
-        acting = [a for a in agents if not _is_intruder_agent(a)]
+        acting = [a for a in agents if not _is_auxiliary_agent(a)]
         intruders = [a for a in agents if _is_intruder_agent(a)]
 
         count_wrong = expected_count is not None and len(acting) != expected_count
         intruder_count_wrong = intruder_count > 0 and len(intruders) != intruder_count
-        expected_encirclers = _count_distinct_position_hints(description)
-        actual_encirclers = sum(1 for a in acting if _is_encircler(a))
-        encircle_role_missing = expected_encirclers > 0 and actual_encirclers < expected_encirclers
+        drone_without_cible = any(
+            _is_drone_agent(a) and not intruders for a in agents
+        )
+        bad_mission = any(
+            not _is_auxiliary_agent(a) and _normalize_mission(a.get('mission')) is None
+            for a in acting
+        )
 
-        if (count_wrong or intruder_count_wrong or encircle_role_missing) and attempt < MAX_RETRIES:
+        if (count_wrong or intruder_count_wrong or drone_without_cible or bad_mission) \
+                and attempt < MAX_RETRIES:
             problems = []
             if count_wrong:
                 problems.append(
@@ -466,11 +451,16 @@ def _parse_scenario_from_description(
                     f"you produced {len(intruders)} intruder agent(s) but the description "
                     f"requires exactly {intruder_count}"
                 )
-            if encircle_role_missing:
+            if drone_without_cible:
                 problems.append(
-                    f"the description describes {expected_encirclers} distinct positions around a "
-                    f"target (front/flank/rear) but only {actual_encirclers} of your agents has "
-                    f"conditions.role_tactique=\"encercleur\" — assign it to EVERY agent described that way"
+                    "you added a \"role\": \"drone\" agent but no \"intruder\" agent exists for "
+                    "it to track — add one, or remove the drone agent"
+                )
+            if bad_mission:
+                problems.append(
+                    f"every acting agent's \"mission\" must be exactly one of "
+                    f"{list(_TOP_LEVEL_MISSIONS)} followed by \" __self__\" — fix any agent "
+                    f"whose mission doesn't match"
                 )
             feedback = "; ".join(problems) + ". Regenerate the full JSON now with the exact counts stated above."
             continue
@@ -485,36 +475,23 @@ def _parse_scenario_from_description(
     return parsed, warnings
 
 
-def _pad_missing_agents(agents: List[Dict[str, Any]], expected_count: int,
-                         description: str) -> List[Dict[str, Any]]:
+def _pad_missing_agents(agents: List[Dict[str, Any]], expected_count: int) -> List[Dict[str, Any]]:
     """
     Deterministic last-resort safety net: if the LLM still didn't produce enough
     acting agents after retrying, clone the last one to reach the required count
     instead of silently returning an incomplete scenario.
     """
-    acting = [a for a in agents if not _is_intruder_agent(a)]
+    acting = [a for a in agents if not _is_auxiliary_agent(a)]
     if not acting or len(acting) >= expected_count:
         return agents
 
-    used_roles = [a.get('conditions', {}).get('encircle_role') for a in acting if a.get('conditions')]
-    used_roles = [r for r in used_roles if r]
     template = acting[-1]
-
-    is_encircle = str(template.get('mission', '')).strip().split(' ')[0] == 'encircle_target'
-
     while len(acting) < expected_count:
         idx = len(acting) + 1
         clone = json.loads(json.dumps(template))  # deep copy
         clone['name'] = f"agent{idx}"
         clone['x'] = float(clone.get('x', 0)) + 0.003 * idx
         clone['y'] = float(clone.get('y', 0)) + 0.003 * idx
-        if is_encircle:
-            role = _guess_encircle_role(description, idx, used_roles)
-            if role:
-                clone.setdefault('conditions', {})['encircle_role'] = role
-                used_roles.append(role)
-        else:
-            clone.get('conditions', {}).pop('encircle_role', None)
         acting.append(clone)
         agents.append(clone)
 
@@ -522,7 +499,7 @@ def _pad_missing_agents(agents: List[Dict[str, Any]], expected_count: int,
 
 
 def _make_default_intruder(agents: List[Dict[str, Any]], index: int = 1) -> Dict[str, Any]:
-    """Synthesize a plausible intruder agent from the acting agents' positions."""
+    """Synthesize a plausible intruder/cible agent from the acting agents' positions."""
     xs = [float(a.get('x', 0)) for a in agents] or [1.26]
     ys = [float(a.get('y', 0)) for a in agents] or [103.75]
     cx, cy = sum(xs) / len(xs) + 0.004 * (index - 1), sum(ys) / len(ys) + 0.004 * (index - 1)
@@ -537,7 +514,7 @@ def _make_default_intruder(agents: List[Dict[str, Any]], index: int = 1) -> Dict
         "heading": 0,
         "velocity": 4,
         "conditions": {"is_intruder": True},
-        "mission": f"aller __self__ {dest[0]} {dest[1]}",
+        "mission": f"aller_a_position __self__ {dest[0]} {dest[1]}",
     }
 
 
@@ -594,7 +571,7 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
 def generate_scenario_from_description(
     description: str,
     existing_kb: Optional[Dict[str, Any]] = None
-) -> Tuple[Optional[Dict[str, Any]], List[str], Dict[str, Any], Optional[List[str]]]:
+) -> Tuple[Optional[Dict[str, Any]], List[str], Dict[str, Any], Optional[List[str]], Optional[str]]:
     """
     Main entry point: Generate scenario + KB updates from natural language.
 
@@ -603,8 +580,10 @@ def generate_scenario_from_description(
         existing_kb: KB to enrich (None = load from disk)
 
     Returns:
-        (scenario_dict_or_None, warnings_list, kb_updates, clarification_questions_or_None)
-        scenario_dict is None exactly when clarification_questions is not None.
+        (scenario_dict_or_None, warnings_list, kb_updates, clarification_questions_or_None,
+         refusal_reason_or_None)
+        scenario_dict is None whenever clarification_questions or refusal_reason is set.
+        refusal_reason means the model was asked and explicitly declined — never guessed.
     """
     kb = existing_kb or _load_kb()
     warnings: List[str] = []
@@ -614,20 +593,24 @@ def generate_scenario_from_description(
         # plausible-looking scenario rather than admit it doesn't know. Ask instead.
         return None, warnings, {}, [
             "Combien d'agents faut-il créer, et quel est le rôle de chacun ?",
-            "Que doivent-ils faire précisément (patrouille, interception, encerclement...) ?",
-        ]
+            "Que doivent-ils faire précisément (veille, suivi, reconnaissance, surveillance de zone...) ?",
+        ], None
 
     try:
         expected_count = _expected_agent_count(description)
         intruder_count = _expected_intruder_count(description)
 
-        parsed, retry_warnings = _parse_scenario_from_description(description, kb)
+        parsed, retry_warnings = _parse_scenario_from_description(description)
         warnings.extend(retry_warnings)
+
+        if parsed.get("cannot_model"):
+            reason = parsed.get("reason") or "Le modèle n'a pas précisé la raison."
+            return None, warnings, {}, None, reason
 
         if parsed.get("needs_clarification"):
             questions = parsed.get("clarification_questions") or []
             if questions:
-                return None, warnings, {}, questions
+                return None, warnings, {}, questions, None
 
         agents_raw = parsed.get("agents") or []
 
@@ -635,11 +618,11 @@ def generate_scenario_from_description(
             # Total failure with no deterministic signal to fall back on — ask instead of guessing.
             return None, warnings, {}, [
                 "Combien d'agents faut-il créer, et quel est le rôle de chacun ?",
-                "Que doivent-ils faire précisément (patrouille, interception, encerclement...) ?",
-            ]
+                "Que doivent-ils faire précisément (veille, suivi, reconnaissance, surveillance de zone...) ?",
+            ], None
 
         if expected_count is not None:
-            agents_raw = _pad_missing_agents(agents_raw, expected_count, description)
+            agents_raw = _pad_missing_agents(agents_raw, expected_count)
 
         current_intruders = [a for a in agents_raw if _is_intruder_agent(a)]
         if intruder_count > len(current_intruders):
@@ -647,16 +630,12 @@ def generate_scenario_from_description(
             for i in range(missing):
                 agents_raw.append(_make_default_intruder(agents_raw, index=len(current_intruders) + i + 1))
             warnings.append(
-                f"{missing} agent(s) intrus manquant(s) dans la réponse de l'IA — ajouté(s) automatiquement."
+                f"{missing} agent(s) cible(s) manquant(s) dans la réponse de l'IA — ajouté(s) automatiquement."
             )
 
         if not agents_raw:
             raw = parsed.get("_raw_response", "")
             warnings.append(f"LLM returned no agents. Raw response (first 400 chars): {raw[:400]}")
-
-        # A small local LLM is unreliable about role values — repair them
-        # deterministically (normalize/dedupe) rather than trust them verbatim.
-        _fix_encircle_roles(agents_raw, description)
 
         # Build agents dict
         agents = {}
@@ -670,12 +649,11 @@ def generate_scenario_from_description(
             conditions = dict(agent_data.get("conditions", {}) or {})
             if role == "intruder":
                 conditions.setdefault("is_intruder", True)
+            if role == "zone":
+                conditions.setdefault("is_zone", True)
             conditions.setdefault("role", role)
-            if conditions.get("encircle_role"):
-                conditions["encircle_role"] = _normalize_encircle_role(conditions["encircle_role"])
 
-            x = float(agent_data.get("x", 0)) or 0.0
-            y = float(agent_data.get("y", 0)) or 0.0
+            x, y = _clamp_coord((float(agent_data.get("x", 0)) or 0.0, float(agent_data.get("y", 0)) or 0.0))
             conditions.setdefault("base_location", f"{x} {y}")
 
             try:
@@ -683,6 +661,7 @@ def generate_scenario_from_description(
             except (TypeError, ValueError):
                 heading = 0.0
 
+            default_model = 'cube' if role == 'zone' else DEFAULT_MODEL
             agent_entry = {
                 "role": role,
                 "x": x,
@@ -690,7 +669,7 @@ def generate_scenario_from_description(
                 "z": 0.0,
                 # Only known LOTUSim assets are spawnable — anything else the LLM
                 # invents (e.g. "boat") silently fails to spawn, so it's normalized here.
-                "model": _normalize_model(agent_data.get("model")),
+                "model": _normalize_model(agent_data.get("model") or default_model),
                 "heading": heading,
                 "velocity": float(agent_data.get("velocity", 5)) or 5.0,
                 "conditions": conditions,
@@ -698,12 +677,24 @@ def generate_scenario_from_description(
 
             if _is_intruder_agent(agent_data):
                 # Numeric destinations are where the LLM is least reliable — always
-                # compute the escape mission ourselves instead of trusting its output.
-                agent_entry["mission"] = f"aller __self__ {x + 0.03:.6f} {y + 0.02:.6f}"
+                # compute the escape mission ourselves instead of trusting its output,
+                # unless the LLM explicitly said this cible stays still.
+                if _normalize_mission(agent_data.get("mission")) == "veiller":
+                    agent_entry["mission"] = "veiller __self__"
+                    agent_entry["resolved_task"] = ["veiller"]
+                else:
+                    agent_entry["mission"] = f"aller_a_position __self__ {x + 0.03:.6f} {y + 0.02:.6f}"
+                    agent_entry["resolved_task"] = ["aller_a_position"]
+            elif _is_zone_agent(agent_data):
+                agent_entry["mission"] = "veiller __self__"
+                agent_entry["resolved_task"] = ["veiller"]
+            elif _is_drone_agent(agent_data):
+                agent_entry["mission"] = "suivre_agent __self__"
+                agent_entry["resolved_task"] = ["suivre_agent"]
             else:
-                # "operer" is the single generic entry point — tactical intent lives
-                # entirely in `conditions`, so the mission string is never LLM-authored.
-                agent_entry["mission"] = "operer __self__"
+                mission_task = _normalize_mission(agent_data.get("mission")) or "veiller"
+                agent_entry["mission"] = f"{mission_task} __self__"
+                agent_entry["resolved_task"] = [mission_task]
 
             agents[name] = agent_entry
             _ensure_agent_exists(kb, name, role)
@@ -712,9 +703,9 @@ def generate_scenario_from_description(
         kb_updates = _enrich_kb_with_methods(kb, parsed)
         _save_kb(kb)
 
-        # Every acting agent already carries its own "operer __self__" mission (set
-        # above) — this scenario-level field is only a display fallback, never LLM-authored.
-        mission_list = ["operer __self__"]
+        # Every acting agent already carries its own resolved mission (set above) —
+        # this scenario-level field is only a display fallback, never LLM-authored.
+        mission_list = ["veiller __self__"]
 
         # Use LLM-generated name if provided, otherwise build a fallback slug
         llm_name = parsed.get("scenario_name", "").strip()
@@ -740,7 +731,7 @@ def generate_scenario_from_description(
             "mission": mission_list
         }
 
-        return scenario, warnings, kb_updates, None
+        return scenario, warnings, kb_updates, None, None
 
     except Exception as e:
         raise Exception(f"Scenario generation failed: {str(e)}")
@@ -781,12 +772,14 @@ def validate_scenario_completeness(
 
 if __name__ == "__main__":
     # Quick test
-    test_desc = "Two drones patrol an area. When an intruder is detected, they intercept it."
+    test_desc = "Un agent surveille une zone. Un drone prend le relais s'il repère un contact."
     print(f"Generating scenario from: {test_desc}\n")
 
     try:
-        scenario, warnings, kb_updates, clarification = generate_scenario_from_description(test_desc)
-        if clarification:
+        scenario, warnings, kb_updates, clarification, refusal = generate_scenario_from_description(test_desc)
+        if refusal:
+            print("✗ Refused:", refusal)
+        elif clarification:
             print("? Clarification needed:", clarification)
         else:
             print("✓ Scenario generated:")

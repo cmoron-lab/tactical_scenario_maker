@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import gtpyhop
-from bdd.utils import in_zone, MIN_MOVE_DEG, distance_deg
+from bdd.utils import in_zone, MIN_MOVE_DEG, distance_deg, check_condition
 
 _KB_PATH = Path(__file__).parent / 'knowledge_base.json'
 
@@ -10,31 +10,35 @@ _KB_PATH = Path(__file__).parent / 'knowledge_base.json'
 # ── Préconditions ─────────────────────────────────────────────────────────────
 
 def _check(cond, agent, state):
-    t   = cond['type']
-    v   = cond.get('value', '')
-    var = cond.get('variable', '')
-    ag  = state.agents.get(agent, {})
+    ag = state.agents.get(agent, {})
+    result = check_condition(cond, ag)
+    if result is not None:
+        return result
 
-    # ── Generic variable checks (new format) ──────────────────────────────
-    if t == 'state_equals':
-        cur = ag.get(var)
-        v_lo = str(v).lower()
-        if v_lo in ('true', 'false'):           # boolean comparison
-            return bool(cur) == (v_lo == 'true')
-        return str(cur) == str(v)
+    t = cond['type']
+    v = cond.get('value', '')
 
-    if t == 'state_below':
-        try:    return float(ag.get(var) or 0) < float(v or 0)
-        except: return False
+    # ── Live distance preconditions — no separate "trigger" pass needed:
+    # distance to the resolved target is computed straight from current positions
+    # at the moment the precondition is checked. "target" accepts the same generic
+    # tokens as subtask args (__intruder__, __base__, __protege__...) or a literal
+    # agent name set directly on this agent/scenario.
+    if t in ('distance_below', 'distance_above'):
+        target_name = _resolve_agent_token(state, agent, cond.get('target', ''))
+        if not target_name:
+            return False
+        self_pos = ag.get('pos')
+        target_pos = state.agents.get(target_name, {}).get('pos')
+        if not self_pos or not target_pos:
+            return False
+        try:
+            threshold = float(cond.get('threshold', 0))
+        except (TypeError, ValueError):
+            return False
+        dist = distance_deg(self_pos, target_pos)
+        return dist < threshold if t == 'distance_below' else dist > threshold
 
-    if t == 'state_above':
-        try:    return float(ag.get(var) or 0) > float(v or 0)
-        except: return False
-
-    if t == 'state_present':
-        return ag.get(var) not in (None, '', False)
-
-    # ── Legacy aliases (backwards compat with old KB files) ───────────────
+    # ── Legacy aliases needing cross-agent lookups (backwards compat) ─────
     if t == 'drone_available':  return bool(ag.get('drone_available'))
     if t == 'drone_absent':     return not bool(ag.get('drone_available'))
     if t == 'weather_equals':   return ag.get('weather') == v
@@ -79,6 +83,16 @@ def _find_agent_by_pattern(state, pattern, agent=None):
     if target in state.agents:
         return target
 
+    # "N'importe quel agent" wildcard — no role/marker filter at all, just the
+    # nearest OTHER agent. Useful for a generic proximity check ("is anything
+    # nearby") that doesn't depend on a specific role being assigned. Landmarks
+    # (e.g. a "__zone__" marker) are excluded — they're a reference point, not
+    # a "contact" to react to.
+    if norm in ('any', 'n_importe_quel_agent', 'anyone'):
+        return _nearest_agent(state, agent, [
+            n for n in state.agents if n != agent and not state.agents[n].get('is_zone')
+        ])
+
     candidates = []
     for name, data in state.agents.items():
         if target and target.lower() in name.lower():
@@ -99,6 +113,30 @@ def _find_agent_by_pattern(state, pattern, agent=None):
         candidates = [name for name, data in state.agents.items() if data.get(marker_key)]
 
     return _nearest_agent(state, agent, candidates)
+
+
+def _resolve_agent_token(state, agent, token):
+    """
+    Resolve a "__token__" (precondition target or subtask arg) to a concrete
+    agent name, for the ASKING agent specifically. Checks, in order:
+
+    1. An explicit per-agent override — this agent's own conditions has a
+       literal field named after the token (e.g. conditions.cible = "agent2"),
+       set via the scenario editor's "sélectionner un agent" dropdown. Always
+       wins — it's a direct, scenario-specific wiring, not a guess.
+    2. The KB's resolve_tokens mapping (e.g. "__cible__" -> "__any__") resolved
+       generically via role/kind/marker or nearest-agent proximity
+       (_find_agent_by_pattern) — the automatic fallback when no override is set.
+    """
+    if not token:
+        return None
+    norm = str(token).strip('_')
+    ag = state.agents.get(agent, {}) if agent else {}
+    override = ag.get(norm)
+    if isinstance(override, str) and override in state.agents:
+        return override
+    pattern = _resolve_tokens.get(token, token)
+    return _find_agent_by_pattern(state, pattern, agent)
 
 
 def _resolve(arg, agent, state):
@@ -143,17 +181,18 @@ def _resolve(arg, agent, state):
 
         return arg.strip('_') if arg.startswith('__') and arg.endswith('__') else arg
 
-    if arg in _resolve_tokens:
-        pattern = _resolve_tokens[arg]
-        resolved = _find_agent_by_pattern(state, pattern, agent)
-        if resolved:
-            return resolved
-        return arg.strip('_') if arg.startswith('__') and arg.endswith('__') else arg
+    if arg == '__destination__':
+        agent_data = state.agents.get(agent, {})
+        parsed = _parse_location(agent_data.get('destination'))
+        if parsed:
+            return parsed
+        return arg.strip('_')
 
-    # Bare dunder token not registered in resolve_tokens (e.g. "__intruder__",
-    # "__base__") — try resolving it directly by role/kind/marker.
+    # Any other "__token__" (registered in resolve_tokens or not, e.g.
+    # "__cible__", "__zone__", "__intruder__") — per-agent override first,
+    # then the generic role/kind/marker/proximity fallback.
     if arg.startswith('__') and arg.endswith('__'):
-        resolved = _find_agent_by_pattern(state, arg, agent)
+        resolved = _resolve_agent_token(state, agent, arg)
         if resolved:
             return resolved
         return arg.strip('_')
@@ -197,6 +236,50 @@ def load_kb():
     return kb
 
 
+# ── Cibles à surveiller pour la replanification événementielle ───────────────
+
+def collect_watched_tokens(kb, task_name, visited=None):
+    """
+    Recursively collect every "__token__" that this task's reachable methods
+    might depend on — both distance-precondition targets and subtask-arg
+    references — across ALL methods (not just whichever currently matches),
+    since which branch is active can change over time. "__self__" is excluded
+    (it's the agent's own position, always implicitly watched).
+    """
+    if visited is None:
+        visited = set()
+    if task_name in visited:
+        return set()
+    visited.add(task_name)
+    task_def = kb.get('tasks', {}).get(task_name)
+    if not task_def:
+        return set()
+
+    tokens = set()
+    for method in task_def.get('methods', []):
+        for cond in method.get('preconditions', []):
+            if cond.get('type') in ('distance_below', 'distance_above') and cond.get('target'):
+                tokens.add(cond['target'])
+        for st in method.get('subtasks', []):
+            for arg in st.get('args', []):
+                if isinstance(arg, str) and arg.startswith('__') and arg.endswith('__') and arg != '__self__':
+                    tokens.add(arg)
+            tokens |= collect_watched_tokens(kb, st.get('task', ''), visited)
+    return tokens
+
+
+def resolve_watched_agents(state, agent, tokens):
+    """Resolve a set of '__token__' patterns to concrete agent names, for `agent`."""
+    resolved = set()
+    for tok in tokens:
+        if tok in ('__base_location__', '__base_position__', '__destination__'):
+            continue  # fixed positions, not another live agent to watch
+        name = _find_agent_by_pattern(state, tok, agent)
+        if name:
+            resolved.add(name)
+    return resolved
+
+
 # ── Méthodes feuilles (locked — logique de mouvement) ────────────────────────
 
 def aller_a_agent_m(state, agent, target):
@@ -231,42 +314,8 @@ def maintenir_contact_m(state, agent, target):
     return [('aller_a', agent, follow_pos)]
 
 
-def standby_m(state, agent):
-    order = getattr(state, 'orders', {}).get(agent)
-    if order is None:
-        return False
-    if state.agents[agent].get('last_waypoint') == order:
-        return False
-    return [('aller_a', agent, order)]
-
-
-def aller_m(state, agent, pos):
-    return [('aller_a', agent, pos)]
-
 def aller_a_position_m(state, agent, pos):
     return [('aller_a', agent, pos)]
-
-# ── Action de coordination ────────────────────────────────────────────────────
-
-def ordonner_intercept(state, agent, target):
-    pos = state.agents.get(target, {}).get('pos')
-    if pos is None:
-        return False
-    history = getattr(state, 'position_history', {}).get(target, [])
-    intercept = _predict_intercept(pos, history)
-    if not hasattr(state, 'orders'):
-        state.orders = {}
-    state.orders[agent] = intercept
-    return state
-
-
-def _predict_intercept(pos, history, steps=5):
-    if len(history) >= 2:
-        prev = history[-1]
-        dlat = pos['lat'] - prev['lat']
-        dlon = pos['lon'] - prev['lon']
-        return (pos['lat'] + dlat * steps, pos['lon'] + dlon * steps)
-    return (pos['lat'] + 0.003, pos['lon'])
 
 
 # ── Déclarations GTpyhop ──────────────────────────────────────────────────────
@@ -274,9 +323,6 @@ def _predict_intercept(pos, history, steps=5):
 gtpyhop.declare_task_methods('aller_a_agent',       aller_a_agent_m)
 gtpyhop.declare_task_methods('suivre',              suivre_m)
 gtpyhop.declare_task_methods('maintenir_contact',   maintenir_contact_m)
-gtpyhop.declare_task_methods('standby',             standby_m)
-gtpyhop.declare_task_methods('aller',               aller_m)
 gtpyhop.declare_task_methods('aller_a_position',    aller_a_position_m)
-gtpyhop.declare_actions(ordonner_intercept)
 
 load_kb()

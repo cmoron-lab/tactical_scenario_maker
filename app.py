@@ -6,7 +6,6 @@ Open: http://localhost:5000
 """
 import importlib
 import json
-import math
 import os
 import subprocess
 import sys
@@ -25,7 +24,7 @@ from bdd.ai_scenario_generator import (  # noqa: E402
 )
 from bdd.utils import agent_conditions  # noqa: E402
 
-SCENARIOS_DIR = 'scenarios'
+SCENARIOS_DIR = Path(__file__).parent / 'scenarios'
 TEMPLATE_PATH = Path(__file__).parent / 'templates' / 'index.html'
 KB_PATH = Path(__file__).parent / 'bdd' / 'knowledge_base.json'
 
@@ -85,76 +84,6 @@ def _str_to_mission(s):
     return tuple(result)
 
 
-def _geo_dist_deg(lat1, lon1, lat2, lon2):
-    return math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2)
-
-
-def _resolve_target_names(agents, pattern):
-    if not pattern:
-        return []
-
-    target = str(pattern).strip()
-    norm = target.strip('_').lower()
-    matched = []
-
-    for name, adata in agents.items():
-        if name == target or target.lower() in name.lower():
-            matched.append(name)
-            continue
-        role = str(adata.get('role', '')).strip().lower()
-        kind = str(adata.get('kind', '')).strip().lower()
-        if role and (role == norm or norm in role):
-            matched.append(name)
-            continue
-        if kind and (kind == norm or norm in kind):
-            matched.append(name)
-
-    if matched:
-        return matched
-
-    # Generic marker convention: ANY token "__xxx__" can be attached to an agent via
-    # a boolean condition "is_xxx" — see bdd/tasks_methods.py::_find_agent_by_pattern.
-    marker_key = f'is_{norm}'
-    marked = [name for name, adata in agents.items() if adata.get(marker_key)]
-    if marked:
-        return marked
-
-    return []
-
-
-def _apply_triggers(triggers, agents, resolve_tokens):
-    """Evaluate event triggers and set agent state variables in-place."""
-    for trig in triggers:
-        condition = trig.get('condition', '')
-        sets_var  = trig.get('sets_variable', '')
-        try:
-            threshold = float(trig.get('threshold', 0))
-        except (TypeError, ValueError):
-            continue
-        if not sets_var:
-            continue
-        # Support both new target_pattern and legacy target_token via resolve_tokens
-        pattern = trig.get('target_pattern') or resolve_tokens.get(trig.get('target_token', ''), '')
-        targets = _resolve_target_names(agents, pattern)
-        for aname, adata in agents.items():
-            if aname in targets:
-                continue
-            pos = adata.get('pos')
-            if not pos:
-                continue
-            triggered = False
-            for tname in targets:
-                tpos = agents[tname].get('pos')
-                if not tpos:
-                    continue
-                dist = _geo_dist_deg(pos['lat'], pos['lon'], tpos['lat'], tpos['lon'])
-                if condition == 'distance_lt' and dist < threshold:
-                    triggered = True; break
-                if condition == 'distance_gt' and dist > threshold:
-                    triggered = True; break
-            adata[sets_var] = triggered
-
-
 def _write_scenario(name, form_agents):
     lines = ['AGENTS = {\n']
     for aname, a in form_agents.items():
@@ -195,11 +124,6 @@ def _compute_plan(name):
     if agents is None:
         return {'error': 'Scénario introuvable'}
 
-    with open(KB_PATH, encoding='utf-8') as f:
-        kb = json.load(f)
-    triggers       = kb.get('event_triggers', [])
-    resolve_tokens = kb.get('resolve_tokens', {})
-
     state = gtpyhop.State('ui_plan_state')
     state.agents = {}
     for aname, agent in agents.items():
@@ -216,9 +140,6 @@ def _compute_plan(name):
                 agent_state[k] = v
         state.agents[aname] = agent_state
 
-    _apply_triggers(triggers, state.agents, resolve_tokens)
-
-    state.orders = {}
     state.position_history = {}
 
     gtpyhop.verbose = 0
@@ -227,7 +148,7 @@ def _compute_plan(name):
         try:
             plan = gtpyhop.find_plan(state, [agent['mission']])
             if plan is False:
-                results[aname] = 'Aucun plan applicable (standby / attente)'
+                results[aname] = 'Aucun plan applicable (préconditions non satisfaites)'
             elif not plan:
                 results[aname] = '[] — inactif (drone géré par agent dédié)'
             else:
@@ -375,7 +296,15 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({'error': 'Description required'}, 400)
                     return
 
-                scenario, warnings, kb_updates, clarification = generate_scenario_from_description(description)
+                scenario, warnings, kb_updates, clarification, refusal = generate_scenario_from_description(description)
+
+                if refusal:
+                    self._send_json({
+                        'ok': True,
+                        'cannot_model': True,
+                        'reason': refusal,
+                    })
+                    return
 
                 if clarification:
                     self._send_json({
