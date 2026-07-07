@@ -2,111 +2,510 @@
   "ros_sources": [
     {
       "topic": "/lotusim/{agent}/pose",
-      "description": "Position GPS en temps réel (lat/lon)"
+      "description": "Position GPS en temps r\u00e9el (lat/lon)"
     }
   ],
   "event_triggers": [
     {
-      "label": "Détection intruder",
+      "label": "Intrus détecté à proximité",
       "condition": "distance_lt",
       "target_pattern": "__intruder__",
       "threshold": 0.003,
       "sets_variable": "intruder_nearby",
       "source_topic": "/lotusim/{agent}/pose"
+    },
+    {
+      "label": "Intrus hors de portée (échappé)",
+      "condition": "distance_gt",
+      "target_pattern": "__intruder__",
+      "threshold": 0.01,
+      "sets_variable": "intruder_escaped",
+      "source_topic": "/lotusim/{agent}/pose"
     }
   ],
   "resolve_tokens": {
     "__intruder__": "__intruder__",
-    "__base__": "__base__",
-    "__patrol__": "__patrol__"
+    "__base_location__": "__base__",
+    "__patrol__": "__patrol__",
+    "__protege__": "__protege__",
+    "agent1": "agent1",
+    "agent2": "agent2",
+    "agent3": "agent3",
+    "intruder": "intruder",
+    "escorteur": "escorteur",
+    "__soutien__": "escorteur",
+    "cargo": "cargo"
   },
   "tasks": {
-    "veille": {
-      "label": "Veille",
+    "operer": {
+      "label": "Op\u00e9rer (point d'entr\u00e9e g\u00e9n\u00e9rique de toute mission)",
       "methods": [
         {
-          "name": "Surveiller et réagir",
+          "name": "R\u00f4le tactique engag\u00e9 (reste sur la mission de contact \u2014 g\u00e8re elle-m\u00eame l'abandon)",
           "preconditions": [
-            { "type": "state_equals", "variable": "intruder_nearby", "value": "true" }
+            {
+              "type": "state_present",
+              "variable": "role_tactique"
+            }
           ],
           "subtasks": [
-            { "task": "respond_to_intruder", "args": ["__self__"] }
+            {
+              "task": "traiter_contact",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Contact hostile d\u00e9tect\u00e9 (r\u00e9action g\u00e9n\u00e9rique, sans r\u00f4le assign\u00e9)",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "intruder_nearby",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "traiter_contact",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Soutien requis",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "soutien_requis",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "soutenir_allie",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Ordre de repli",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "ordre_repli",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "rentrer_a_la_base",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Patrouille active",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "patrol_active",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "patrouiller",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Veille passive (d\u00e9faut)",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "veiller",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         }
       ]
     },
-    "respond_to_intruder": {
-      "label": "Répondre à l'intruder",
+    "veiller": {
+      "label": "Veille passive",
       "methods": [
         {
-          "name": "Déploiement coordonné",
-          "preconditions": [
-            { "type": "state_equals", "variable": "drone_available", "value": "true" },
-            { "type": "state_equals", "variable": "weather",         "value": "clear" },
-            { "type": "state_equals", "variable": "usv_intercept",   "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "deployer_drone",    "args": ["__self__"] },
-            { "task": "veille",            "args": ["usv_intercept", "__intruder__"] },
-            { "task": "maintenir_contact", "args": ["__self__", "__intruder__"] }
-          ]
-        },
-        {
-          "name": "Drone + météo favorable",
-          "preconditions": [
-            { "type": "state_equals", "variable": "drone_available", "value": "true" },
-            { "type": "state_equals", "variable": "weather",         "value": "clear" }
-          ],
-          "subtasks": [
-            { "task": "deployer_drone", "args": ["__self__"] },
-            { "task": "suivre",         "args": ["__self__", "__intruder__"] }
-          ]
-        },
-        {
-          "name": "Sans drone, intercepteur disponible",
-          "preconditions": [
-            { "type": "state_equals", "variable": "drone_available",  "value": "false" },
-            { "type": "state_equals", "variable": "usv_intercept",    "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "suivre", "args": ["__self__", "__intruder__"] },
-            { "task": "veille", "args": ["usv_intercept", "__intruder__"] }
-          ]
-        },
-        {
-          "name": "Drone présent dans le scénario — USV inactif",
-          "preconditions": [
-            { "type": "state_equals", "variable": "drone_available", "value": "true" },
-            { "type": "state_equals", "variable": "drone_present",   "value": "true" }
-          ],
+          "name": "Attente en position (aucune action n\u00e9cessaire)",
+          "preconditions": [],
           "subtasks": []
-        },
+        }
+      ]
+    },
+    "traiter_contact": {
+      "label": "Traiter un contact d\u00e9tect\u00e9",
+      "methods": [
         {
-          "name": "Drone disponible — déploiement direct",
+          "name": "R\u00f4le d'encercleur",
           "preconditions": [
-            { "type": "state_equals", "variable": "drone_available", "value": "true" }
+            {
+              "type": "state_equals",
+              "variable": "role_tactique",
+              "value": "encercleur"
+            }
           ],
           "subtasks": [
-            { "task": "aller_a_agent", "args": ["__self__", "__intruder__"] }
+            {
+              "task": "executer_encerclement",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         },
         {
-          "name": "Fallback — suivre direct",
+          "name": "R\u00f4le d'intercepteur",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "role_tactique",
+              "value": "intercepteur"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "intercepter_cible",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "R\u00f4le d'observateur",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "role_tactique",
+              "value": "observateur"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "maintenir_contact_visuel",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Approche par d\u00e9faut (aucun r\u00f4le assign\u00e9)",
           "preconditions": [],
           "subtasks": [
-            { "task": "suivre", "args": ["__self__", "__intruder__"] }
+            {
+              "task": "approcher_cible",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         }
       ]
     },
-    "deployer_drone": {
-      "label": "Déployer drone",
+    "executer_encerclement": {
+      "label": "Ex\u00e9cuter un encerclement coordonn\u00e9",
       "methods": [
         {
-          "name": "Vers l'intruder",
+          "name": "Cible \u00e9chapp\u00e9e \u2014 abandon et retour",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "intruder_escaped",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "rentrer_a_la_base",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Blocage frontal (r\u00f4le blockade)",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "encircle_role",
+              "value": "blockade"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "bloquer_route",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Flanquement (r\u00f4le flank)",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "encircle_role",
+              "value": "flank"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "flanquer",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Couverture arri\u00e8re (r\u00f4le rear_guard)",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "encircle_role",
+              "value": "rear_guard"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "couvrir_arriere",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Approche par d\u00e9faut (aucun r\u00f4le d'encerclement assign\u00e9)",
           "preconditions": [],
           "subtasks": [
-            { "task": "aller_a_agent", "args": ["__self__", "__intruder__"] }
+            {
+              "task": "approcher_cible",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "bloquer_route": {
+      "label": "Bloquer la route de la cible",
+      "methods": [
+        {
+          "name": "Interception calcul\u00e9e puis blocage",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "interception_calculee",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "flanquer": {
+      "label": "Man\u0153uvre de flanquement",
+      "methods": [
+        {
+          "name": "Suivi lat\u00e9ral d\u00e9cal\u00e9",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "maintenir_contact",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "couvrir_arriere": {
+      "label": "Couverture arri\u00e8re",
+      "methods": [
+        {
+          "name": "Suivi \u00e0 distance",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "suivre",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "interception_calculee": {
+      "label": "Calculer puis ex\u00e9cuter une interception (bloc r\u00e9utilisable)",
+      "methods": [
+        {
+          "name": "Calcul du point d'interception puis d\u00e9placement",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "ordonner_intercept",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            },
+            {
+              "task": "standby",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "intercepter_cible": {
+      "label": "Intercepter une cible en poursuite libre",
+      "methods": [
+        {
+          "name": "Cible \u00e9chapp\u00e9e \u2014 abandon et retour",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "intruder_escaped",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "rentrer_a_la_base",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Interception calcul\u00e9e",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "interception_calculee",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Suivi direct (secours)",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "suivre",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "maintenir_contact_visuel": {
+      "label": "Observation rapproch\u00e9e sans intervention",
+      "methods": [
+        {
+          "name": "Observation \u00e0 distance de s\u00e9curit\u00e9",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "maintenir_contact",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "approcher_cible": {
+      "label": "Approcher directement une cible",
+      "methods": [
+        {
+          "name": "Approche directe",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "aller_a_agent",
+              "args": [
+                "__self__",
+                "__intruder__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "soutenir_allie": {
+      "label": "Soutenir/escorter un agent alli\u00e9",
+      "methods": [
+        {
+          "name": "Contact hostile pendant l'escorte",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "intruder_nearby",
+              "value": "true"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "traiter_contact",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Accompagnement rapproch\u00e9",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "maintenir_contact",
+              "args": [
+                "__self__",
+                "__protege__"
+              ]
+            }
           ]
         }
       ]
@@ -115,137 +514,103 @@
       "label": "Patrouiller",
       "methods": [
         {
-          "name": "Patrouille active",
+          "name": "Itin\u00e9raire de patrouille",
           "preconditions": [
-            { "type": "state_equals", "variable": "patrol_active", "value": "true" }
+            {
+              "type": "state_equals",
+              "variable": "patrol_active",
+              "value": "true"
+            }
           ],
           "subtasks": [
-            { "task": "aller_a_agent", "args": ["__self__", "__patrol__"] }
+            {
+              "task": "suivre_itineraire",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         },
         {
-          "name": "Patrouille de secours",
-          "preconditions": [
-            { "type": "state_equals", "variable": "patrol_active", "value": "true" },
-            { "type": "state_equals", "variable": "patrol_ready", "value": "true" }
-          ],
+          "name": "Attente (secours)",
+          "preconditions": [],
           "subtasks": [
-            { "task": "standby", "args": ["__self__"] }
+            {
+              "task": "veiller",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         }
       ]
     },
-    "proteger_agent": {
-      "label": "Protéger un agent",
+    "suivre_itineraire": {
+      "label": "Suivre l'itin\u00e9raire de patrouille",
       "methods": [
         {
-          "name": "Protection rapprochée",
-          "preconditions": [
-            { "type": "state_equals", "variable": "protective_mode", "value": "true" }
-          ],
+          "name": "Vers le point de patrouille",
+          "preconditions": [],
           "subtasks": [
-            { "task": "maintenir_contact", "args": ["__self__", "__intruder__"] },
-            { "task": "deployer_drone", "args": ["__self__"] }
-          ]
-        },
-        {
-          "name": "Protection par patrouille",
-          "preconditions": [
-            { "type": "state_equals", "variable": "protective_mode", "value": "true" },
-            { "type": "state_equals", "variable": "patrol_active", "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "suivre", "args": ["__self__", "__intruder__"] },
-            { "task": "patrouiller", "args": ["__self__"] }
+            {
+              "task": "aller_a_agent",
+              "args": [
+                "__self__",
+                "__patrol__"
+              ]
+            }
           ]
         }
       ]
     },
-    "intercepter_agent": {
-      "label": "Intercepter une cible",
+    "rentrer_a_la_base": {
+      "label": "Rentrer \u00e0 la base",
       "methods": [
         {
-          "name": "Interception coordonnée",
-          "preconditions": [
-            { "type": "state_equals", "variable": "intercept_ready", "value": "true" },
-            { "type": "state_equals", "variable": "usv_intercept", "value": "true" }
-          ],
+          "name": "Retour vers la base",
+          "preconditions": [],
           "subtasks": [
-            { "task": "ordonner_intercept", "args": ["__self__", "__intruder__"] },
-            { "task": "suivre", "args": ["__self__", "__intruder__"] }
-          ]
-        },
-        {
-          "name": "Interception directe",
-          "preconditions": [
-            { "type": "state_equals", "variable": "intercept_ready", "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "suivre", "args": ["__self__", "__intruder__"] }
+            {
+              "task": "naviguer_vers_base",
+              "args": [
+                "__self__"
+              ]
+            }
           ]
         }
       ]
     },
-    "retourner_a_la_base": {
-      "label": "Retourner à la base",
+    "naviguer_vers_base": {
+      "label": "Naviguer vers la position de base",
       "methods": [
         {
-          "name": "Retour vers une position de base",
-          "preconditions": [
-            { "type": "state_equals", "variable": "return_to_base", "value": "true" }
-          ],
+          "name": "D\u00e9placement vers la position de base",
+          "preconditions": [],
           "subtasks": [
-            { "task": "aller_a_position", "args": ["__self__", "__base_position__"] }
-          ]
-        },
-        {
-          "name": "Base disponible",
-          "preconditions": [
-            { "type": "state_equals", "variable": "base_available", "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "aller_a_position", "args": ["__self__", "__base_position__"] }
-          ]
-        }
-      ]
-    },
-    "surveiller_zone": {
-      "label": "Surveiller une zone",
-      "methods": [
-        {
-          "name": "Observation active",
-          "preconditions": [
-            { "type": "state_equals", "variable": "zone_observed", "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "suivre", "args": ["__self__", "__intruder__"] }
-          ]
-        },
-        {
-          "name": "Observation par contact",
-          "preconditions": [
-            { "type": "state_equals", "variable": "zone_observed", "value": "true" },
-            { "type": "state_equals", "variable": "intruder_nearby", "value": "true" }
-          ],
-          "subtasks": [
-            { "task": "maintenir_contact", "args": ["__self__", "__intruder__"] }
+            {
+              "task": "aller_a_position",
+              "args": [
+                "__self__",
+                "__base_location__"
+              ]
+            }
           ]
         }
       ]
     }
   },
   "leaf_tasks": {
-    "suivre":            "Suivre un agent",
-    "aller_a_agent":     "Aller vers un agent",
-    "aller_a_position":  "Aller vers une position",
+    "suivre": "Suivre un agent",
+    "aller_a_agent": "Aller vers un agent",
+    "aller_a_position": "Aller vers une position",
     "maintenir_contact": "Maintenir contact",
-    "standby":           "Standby",
-    "aller":             "Aller à position fixe (lat/lon)",
+    "standby": "Standby",
+    "aller": "Aller \u00e0 position fixe (lat/lon)",
     "ordonner_intercept": "Ordonner une interception"
   },
   "primitive_actions": {
-    "aller_a":            "Envoyer waypoint (ROS)",
+    "aller_a": "Envoyer waypoint (ROS)",
     "ordonner_intercept": "Calculer interception",
-    "spawn_vessel":       "Spawner un agent (ROS)"
+    "spawn_vessel": "Spawner un agent (ROS)"
   }
 }

@@ -10,7 +10,6 @@ import math
 import os
 import subprocess
 import sys
-import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,6 +19,11 @@ import gtpyhop
 gtpyhop.Domain('ui_plan')
 import bdd.tasks_methods        # noqa: E402
 import bdd.primitives_actions   # noqa: E402
+from bdd.ai_scenario_generator import (  # noqa: E402
+    generate_scenario_from_description,
+    validate_scenario_completeness,
+)
+from bdd.utils import agent_conditions  # noqa: E402
 
 SCENARIOS_DIR = 'scenarios'
 TEMPLATE_PATH = Path(__file__).parent / 'templates' / 'index.html'
@@ -108,10 +112,10 @@ def _resolve_target_names(agents, pattern):
     if matched:
         return matched
 
-    marked = [
-        name for name, adata in agents.items()
-        if adata.get('is_intruder') or adata.get('role') == 'intruder' or adata.get('kind') == 'intruder'
-    ]
+    # Generic marker convention: ANY token "__xxx__" can be attached to an agent via
+    # a boolean condition "is_xxx" — see bdd/tasks_methods.py::_find_agent_by_pattern.
+    marker_key = f'is_{norm}'
+    marked = [name for name, adata in agents.items() if adata.get(marker_key)]
     if marked:
         return marked
 
@@ -151,19 +155,6 @@ def _apply_triggers(triggers, agents, resolve_tokens):
             adata[sets_var] = triggered
 
 
-def _agent_conditions(agent):
-    """Return conditions dict — prefers new 'conditions' key, falls back to equipement."""
-    if 'conditions' in agent:
-        return agent['conditions']
-    eq = agent.get('equipement', {})
-    cond = {}
-    if 'drone' in eq:
-        cond['drone_available'] = bool(eq['drone'])
-    if 'weather' in eq:
-        cond['weather'] = eq['weather']
-    return cond
-
-
 def _write_scenario(name, form_agents):
     lines = ['AGENTS = {\n']
     for aname, a in form_agents.items():
@@ -175,22 +166,20 @@ def _write_scenario(name, form_agents):
             y_val = float(a.get('y', 0))
         except (TypeError, ValueError):
             y_val = 0.0
-        base_pos = a.get('base_pos')
-        if isinstance(base_pos, (list, tuple)) and len(base_pos) >= 2:
-            base_lat, base_lon = base_pos[0], base_pos[1]
-        else:
-            base_lat, base_lon = None, None
         vel_min = float(a.get('vel_min', 0))
         vel_max = float(a.get('vel_max', 5))
         ang_vel = float(a.get('ang_vel', 0.05))
+        try:
+            heading = float(a.get('heading', 0))
+        except (TypeError, ValueError):
+            heading = 0.0
         mission = _str_to_mission(a.get('mission', ''))
         cond    = a.get('conditions', {})
         lines.append(f'    {repr(aname)}: {{\n')
         lines.append(f"        'x': {x_val},\n")
         lines.append(f"        'y': {y_val},\n")
         lines.append(f"        'model': {repr(a.get('model', 'wamv'))},\n")
-        if base_lat is not None and base_lon is not None:
-            lines.append(f"        'base_pos': ({base_lat}, {base_lon}),\n")
+        lines.append(f"        'heading': {heading},\n")
         lines.append(f"        'linear_velocities_limits': ({vel_min}, {vel_max}),\n")
         lines.append(f"        'angular_velocities_limits': {ang_vel},\n")
         lines.append(f"        'conditions': {repr(cond)},\n")
@@ -214,7 +203,7 @@ def _compute_plan(name):
     state = gtpyhop.State('ui_plan_state')
     state.agents = {}
     for aname, agent in agents.items():
-        cond = _agent_conditions(agent)
+        cond = agent_conditions(agent)
         agent_state = {
             'pos':           {'lat': agent['x'], 'lon': agent['y']},
             'available':     True,
@@ -273,6 +262,8 @@ def _route(method, path):
             return 'save_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'launch':
             return 'launch_scenario', {'name': parts[2]}
+        if parts == ['api', 'generate-scenario']:
+            return 'generate_scenario', {}
 
     if method == 'DELETE':
         if len(parts) == 3 and parts[0] == 'api' and parts[1] == 'scenario':
@@ -292,7 +283,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', len(body))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _send_html(self, path):
         content = path.read_bytes()
@@ -300,7 +294,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', len(content))
         self.end_headers()
-        self.wfile.write(content)
+        try:
+            self.wfile.write(content)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _read_json(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -340,10 +337,11 @@ class Handler(BaseHTTPRequestHandler):
                     'x':          agent['x'],
                     'y':          agent['y'],
                     'model':      agent.get('model', 'wamv'),
+                    'heading':    agent.get('heading', 0),
                     'vel_min':    lim[0],
                     'vel_max':    lim[1],
                     'ang_vel':      agent.get('angular_velocities_limits', 0.05),
-                    'conditions':   _agent_conditions(agent),
+                    'conditions':   agent_conditions(agent),
                     'mission':      _mission_to_str(agent['mission']),
                 }
             self._send_json(result)
@@ -369,6 +367,38 @@ class Handler(BaseHTTPRequestHandler):
             )
             self._send_json({'ok': True, 'pid': proc.pid})
 
+        elif action == 'generate_scenario':
+            try:
+                body = self._read_json()
+                description = body.get('description', '').strip()
+                if not description:
+                    self._send_json({'error': 'Description required'}, 400)
+                    return
+
+                scenario, warnings, kb_updates, clarification = generate_scenario_from_description(description)
+
+                if clarification:
+                    self._send_json({
+                        'ok': True,
+                        'needs_clarification': True,
+                        'questions': clarification,
+                    })
+                    return
+
+                issues = validate_scenario_completeness(scenario)
+
+                self._send_json({
+                    'ok': True,
+                    'scenario': scenario,
+                    'warnings': warnings,
+                    'issues': issues,
+                    'kb_updates': kb_updates
+                })
+            except Exception as e:
+                self._send_json({
+                    'error': str(e),
+                    'details': 'Make sure Ollama is running: ollama serve'
+                }, 500)
         else:
             self._send_json({'error': 'not found'}, 404)
 

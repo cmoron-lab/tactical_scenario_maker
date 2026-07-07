@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import gtpyhop
-from bdd.utils import in_zone, MIN_MOVE_DEG
+from bdd.utils import in_zone, MIN_MOVE_DEG, distance_deg
 
 _KB_PATH = Path(__file__).parent / 'knowledge_base.json'
 
@@ -31,6 +31,9 @@ def _check(cond, agent, state):
         try:    return float(ag.get(var) or 0) > float(v or 0)
         except: return False
 
+    if t == 'state_present':
+        return ag.get(var) not in (None, '', False)
+
     # ── Legacy aliases (backwards compat with old KB files) ───────────────
     if t == 'drone_available':  return bool(ag.get('drone_available'))
     if t == 'drone_absent':     return not bool(ag.get('drone_available'))
@@ -46,46 +49,115 @@ def _check(cond, agent, state):
 _resolve_tokens: dict = {}   # populated by load_kb() from KB resolve_tokens section
 
 
-def _find_agent_by_pattern(state, pattern):
+def _nearest_agent(state, agent, candidates):
+    """
+    Several agents can match the same pattern (e.g. several intruders) — prefer
+    whichever is closest to the asking agent rather than an arbitrary dict-order
+    pick, so "__intruder__" means "the nearest threat", not "the first one found".
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1 or not agent:
+        return candidates[0]
+    self_pos = state.agents.get(agent, {}).get('pos')
+    if not self_pos:
+        return candidates[0]
+
+    def _dist(name):
+        pos = state.agents.get(name, {}).get('pos')
+        return distance_deg(self_pos, pos) if pos else float('inf')
+
+    return min(candidates, key=_dist)
+
+
+def _find_agent_by_pattern(state, pattern, agent=None):
     if not pattern:
         return None
     target = str(pattern).strip()
     norm = target.strip('_').lower()
 
+    if target in state.agents:
+        return target
+
+    candidates = []
     for name, data in state.agents.items():
-        if name == target:
-            return name
         if target and target.lower() in name.lower():
-            return name
+            candidates.append(name)
+            continue
         role = str(data.get('role', '')).strip().lower()
         kind = str(data.get('kind', '')).strip().lower()
         if role and (role == norm or norm in role):
-            return name
-        if kind and (kind == norm or norm in kind):
-            return name
+            candidates.append(name)
+        elif kind and (kind == norm or norm in kind):
+            candidates.append(name)
 
-    for name, data in state.agents.items():
-        if data.get('is_intruder') and norm in {'intruder', 'intru', 'intruderagent', 'intrud'}:
-            return name
-        if data.get('is_base') and norm in {'base', 'port', 'dock', 'harbor'}:
-            return name
-        if str(data.get('role', '')).strip().lower() == 'base' and norm in {'base', 'port', 'dock', 'harbor'}:
-            return name
-        if 'base' in str(name).lower() and norm in {'base', 'port', 'dock', 'harbor'}:
-            return name
+    if not candidates:
+        # Generic marker convention: ANY token "__xxx__" can be attached to an agent
+        # via a boolean condition "is_xxx" (e.g. "__vip__" -> conditions: {is_vip: true})
+        # — no code change needed here to support a new token or several matching agents.
+        marker_key = f'is_{norm}'
+        candidates = [name for name, data in state.agents.items() if data.get(marker_key)]
 
-    return None
+    return _nearest_agent(state, agent, candidates)
 
 
 def _resolve(arg, agent, state):
     if arg == '__self__':
         return agent
+
+    def _parse_location(value):
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            try:
+                return float(value[0]), float(value[1])
+            except (TypeError, ValueError):
+                return None
+        if isinstance(value, str):
+            parts = value.strip().split()
+            if len(parts) == 2:
+                try:
+                    return float(parts[0]), float(parts[1])
+                except ValueError:
+                    return None
+        return None
+
+    if arg in ('__base_position__', '__base_location__'):
+        # Check current agent's own conditions first
+        agent_data = state.agents.get(agent, {})
+        loc = agent_data.get('base_location') or agent_data.get('base_pos') or agent_data.get('base_position')
+        parsed = _parse_location(loc)
+        if parsed:
+            return parsed
+
+        # Fallback: look in any agent data
+        for data in state.agents.values():
+            loc = data.get('base_location') or data.get('base_pos') or data.get('base_position')
+            parsed = _parse_location(loc)
+            if parsed:
+                return parsed
+
+        base_agent = _find_agent_by_pattern(state, '__base__', agent)
+        if base_agent:
+            pos = state.agents.get(base_agent, {}).get('pos')
+            if pos is not None:
+                return pos['lat'], pos['lon']
+
+        return arg.strip('_') if arg.startswith('__') and arg.endswith('__') else arg
+
     if arg in _resolve_tokens:
         pattern = _resolve_tokens[arg]
-        resolved = _find_agent_by_pattern(state, pattern)
+        resolved = _find_agent_by_pattern(state, pattern, agent)
         if resolved:
             return resolved
         return arg.strip('_') if arg.startswith('__') and arg.endswith('__') else arg
+
+    # Bare dunder token not registered in resolve_tokens (e.g. "__intruder__",
+    # "__base__") — try resolving it directly by role/kind/marker.
+    if arg.startswith('__') and arg.endswith('__'):
+        resolved = _find_agent_by_pattern(state, arg, agent)
+        if resolved:
+            return resolved
+        return arg.strip('_')
+
     return arg
 
 

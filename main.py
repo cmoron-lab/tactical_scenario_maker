@@ -66,10 +66,9 @@ gtpyhop.Domain('htn_v1')
 
 import sys as _sys; _sys.modules.setdefault('main', _sys.modules[__name__])
 
-from bdd.events import EventChecker
 from bdd.primitives_actions import spawn_vessel
 import bdd.tasks_methods
-from bdd.utils import in_zone, DETECTION_RADIUS_DEG
+from bdd.utils import in_zone, DETECTION_RADIUS_DEG, agent_conditions, is_intruder_agent
 
 _scenario_name = sys.argv[1] if len(sys.argv) > 1 else 'scenario_1'
 import importlib
@@ -90,7 +89,7 @@ def _update_state_from_tracker(state):
             state.agents[name]['pos'] = pos
 
     # Calcul automatique de intruder_nearby pour chaque agent non-intruder
-    threats = [n for n in state.agents if 'intru' in n]
+    threats = [n for n in state.agents if is_intruder_agent(AGENTS.get(n, {}))]
     for name in state.agents:
         if name in threats:
             continue
@@ -140,17 +139,16 @@ def main():
     try:
         gtpyhop.verbose = 0
         state = gtpyhop.State('initial_state')
-        state.agents = {
-            name: {
+        state.agents = {}
+        for name, info in AGENTS.items():
+            agent_state = {
                 'pos':             {'lat': info['x'], 'lon': info['y']},
-                'drone_available': info.get('equipement', {}).get('drone', False),
-                'weather':         info.get('equipement', {}).get('weather'),
                 'available':       True,
                 'intruder_nearby': False,
                 'last_waypoint':   None,
             }
-            for name, info in AGENTS.items()
-        }
+            agent_state.update(agent_conditions(info))
+            state.agents[name] = agent_state
         state.orders = {}
         state.position_history = {}
 
@@ -164,9 +162,13 @@ def main():
         tracker.start(node)
 
         for name, info in AGENTS.items():
-            spawn_vessel(node, name, (info['x'], info['y']), info['model'],
-                         info.get('linear_velocities_limits', (0, 5)),
-                         info.get('angular_velocities_limits', 0.05))
+            try:
+                spawn_vessel(node, name, (info['x'], info['y']), info['model'],
+                             info.get('linear_velocities_limits', (0, 5)),
+                             info.get('angular_velocities_limits', 0.05),
+                             heading=info.get('heading', 0.0))
+            except Exception as e:
+                node.get_logger().error(f"[spawn] échec pour '{name}' (model={info['model']!r}): {e}")
             time.sleep(3.0)
 
         threads = [

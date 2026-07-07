@@ -1084,6 +1084,7 @@ header {
 <nav class="tabs-nav">
   <button class="tab-btn active" data-tab="scenarios" onclick="switchTab('scenarios')">Scénarios</button>
   <button class="tab-btn"        data-tab="kb"        onclick="switchTab('kb')">Connaissances HTN</button>
+  <button class="tab-btn"        data-tab="ia"        onclick="switchTab('ia')">🤖 IA</button>
 </nav>
 
 <!-- ── Tab: Scénarios ─────────────────────────────────────────────────── -->
@@ -1175,9 +1176,124 @@ header {
   </div>
 </div>
 
+<!-- ── Tab: IA ────────────────────────────────────────────────────────── -->
+<div id="tab-ia" style="display:none">
+  <div style="padding:28px 32px;max-height:calc(100vh - 56px - 41px);overflow-y:auto">
+    <div style="max-width:800px;margin:0 auto">
+      <h2 style="font-size:24px;font-weight:600;margin-bottom:12px;color:var(--text)">🤖 Générateur de scénarios IA</h2>
+      <p style="color:var(--text2);margin-bottom:28px;line-height:1.6">
+        Décrivez votre scénario tactique en langage naturel. L'IA générera automatiquement les agents, les tâches, 
+        les méthodes HTN et les conditions. Les tâches manquantes seront ajoutées à la base de connaissances.
+      </p>
+
+      <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:24px;margin-bottom:24px">
+        <label style="display:block;margin-bottom:12px;font-weight:600;color:var(--text)">Description du scénario</label>
+        <textarea 
+          id="ia-description" 
+          placeholder="Ex: Deux drones patrouillent une zone. Quand un intrus est détecté à proximité, l'un se rapproche tandis que l'autre continue la surveillance. Ils retournent à la base après 1 heure."
+          style="width:100%;min-height:120px;padding:12px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:13px;resize:vertical;color:var(--text)"
+        ></textarea>
+        
+        <div style="margin-top:16px;display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="generateScenarioFromAI()">
+            ✨ Générer le scénario
+          </button>
+          <button class="btn btn-ghost" onclick="document.getElementById('ia-description').value = ''">
+            Effacer
+          </button>
+        </div>
+
+        <div id="ia-status" style="display:none;margin-top:16px;padding:12px;border-radius:4px;font-size:13px">
+          <div id="ia-status-msg"></div>
+        </div>
+
+        <!-- Clarification questions from the AI -->
+        <div id="ia-clarify" style="display:none;margin-top:16px;padding:16px;background:#FFF8E6;border:1px solid #FFE8A8;border-radius:4px">
+          <div style="font-weight:600;color:#D4A400;margin-bottom:8px">❓ L'IA a besoin de précisions</div>
+          <ul id="ia-clarify-questions" style="margin:0 0 12px 20px;color:var(--text2);font-size:13px"></ul>
+          <textarea id="ia-clarify-answer" placeholder="Répondez ici en quelques mots..."
+            style="width:100%;min-height:70px;padding:10px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:13px;resize:vertical;color:var(--text)"></textarea>
+          <div style="margin-top:10px">
+            <button class="btn btn-primary" onclick="submitClarificationAnswer()">Renvoyer avec ces précisions</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generated scenario preview -->
+      <div id="ia-result" style="display:none;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:24px">
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Scénario généré</h3>
+        
+        <!-- Agents -->
+        <div style="margin-bottom:24px">
+          <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px">Agents</h4>
+          <div id="ia-agents-list" style="background:var(--bg);border-radius:4px;padding:12px"></div>
+        </div>
+
+        <!-- Tasks & Methods -->
+        <div style="margin-bottom:24px">
+          <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px">Tâches & Méthodes</h4>
+          <div id="ia-tasks-list" style="background:var(--bg);border-radius:4px;padding:12px;max-height:200px;overflow-y:auto"></div>
+        </div>
+
+        <div style="margin-bottom:24px">
+          <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px">KB mises à jour</h4>
+          <div id="ia-kb-updates" style="background:var(--bg);border-radius:4px;padding:12px;max-height:180px;overflow-y:auto"></div>
+        </div>
+
+        <!-- Warnings & Issues -->
+        <div id="ia-warnings" style="display:none;margin-bottom:24px;background:#FFF8E6;border:1px solid #FFE8A8;border-radius:4px;padding:12px">
+          <div style="font-weight:600;color:#D4A400;margin-bottom:8px">⚠ Avertissements</div>
+          <ul id="ia-warnings-list" style="margin-left:20px;color:var(--text2);font-size:12px"></ul>
+        </div>
+
+        <!-- Actions -->
+        <div style="border-top:1px solid var(--border);padding-top:16px">
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Nom du scénario</label>
+            <input id="ia-scenario-name" type="text" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px"
+              placeholder="ex: encerclement_3_agents">
+          </div>
+          <div style="display:flex;gap:12px">
+            <button class="btn btn-primary" onclick="importGeneratedScenario()">
+              📥 Importer comme scénario
+            </button>
+            <button class="btn btn-outline" onclick="document.getElementById('ia-result').style.display = 'none'">
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px;padding:20px;background:var(--navy-light);border-radius:6px;font-size:12px;color:var(--text2);line-height:1.6">
+        <strong style="color:var(--navy)">ℹ Note technique :</strong><br>
+        Cette fonctionnalité nécessite Ollama pour fonctionner localement et gratuitement.
+        <a href="https://ollama.ai" target="_blank" style="color:var(--blue);text-decoration:none">Installer Ollama</a> (gratuit),
+        puis lancer: <code style="background:#fff;padding:2px 4px;border-radius:2px">ollama serve</code>,
+        et télécharger un modèle: <code style="background:#fff;padding:2px 4px;border-radius:2px">ollama pull mistral</code>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
+// ── Modèles de vaisseau spawnables (src/LOTUSim/assets/models/) ──────────────
+// "landscape" et "seabed" sont des assets d'environnement, pas des agents — exclus.
+const VESSEL_MODELS = [
+  { id: 'wamv',           label: 'WAM-V (catamaran de surface)' },
+  { id: 'fremm',          label: 'FREMM (frégate de surface)' },
+  { id: 'pha',            label: 'PHA (porte-hélicoptères amphibie)' },
+  { id: 'bluerov2_heavy', label: 'BlueROV2 Heavy (ROV sous-marin)' },
+  { id: 'lrauv',          label: 'LRAUV (drone sous-marin autonome)' },
+  { id: 'x500',           label: 'x500 (drone quadricoptère)' },
+  { id: 'x500_base',      label: 'x500 Base' },
+  { id: 'commando',       label: 'Commando' },
+  { id: 'dtmb_hull',      label: 'DTMB Hull (coque de référence)' },
+  { id: 'mine',           label: 'Mine (objet statique)' },
+  { id: 'cube',           label: 'Cube (test générique)' },
+];
+
 // ── Task catalogue (scenario editor) ─────────────────────────────────────────
 let TASKS = {};
 
@@ -1210,6 +1326,27 @@ function getTaskMeta(task) {
   return { label: fallback || task, extra: inferTaskExtra(task, fallback || task) };
 }
 
+function getTaskRequiredArgs(taskName, visited = new Set()) {
+  if (!kbData || visited.has(taskName)) return [];
+  visited.add(taskName);
+
+  const task = kbData.tasks?.[taskName];
+  if (!task || !Array.isArray(task.methods)) return [];
+
+  const placeholders = new Set();
+  for (const method of task.methods) {
+    for (const st of method.subtasks || []) {
+      for (const arg of st.args || []) {
+        if (['__base_location__', '__base_position__'].includes(arg)) {
+          placeholders.add(arg);
+        }
+      }
+      getTaskRequiredArgs(st.task, visited).forEach(ph => placeholders.add(ph));
+    }
+  }
+  return [...placeholders];
+}
+
 let current = null;
 loadList();
 // KB is needed for condition fields in the scenario editor — load early
@@ -1220,9 +1357,14 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('tab-scenarios').style.display = tab === 'scenarios' ? '' : 'none';
   document.getElementById('tab-kb').style.display        = tab === 'kb'        ? '' : 'none';
+  document.getElementById('tab-ia').style.display        = tab === 'ia'        ? '' : 'none';
   if (tab === 'kb') {
-    if (kbData) renderKB(kbData);  // already loaded silently — just render
-    else        loadKB();           // first open — fetch then render
+    // Always re-fetch so the KB tab stays in sync with any server-side updates (e.g. AI generation)
+    fetch('/api/kb').then(r => r.json()).then(kb => {
+      kbData = kb;
+      refreshTaskCatalog(kb);
+      renderKB(kb);
+    });
   }
 }
 
@@ -1319,11 +1461,15 @@ function buildCard(name, a = {}) {
       </div>
       <div class="field">
         <label>Modèle</label>
-        <input name="model" value="${a.model ?? 'wamv'}">
+        <select name="model">
+          ${VESSEL_MODELS.map(m =>
+            `<option value="${m.id}" ${m.id === (a.model ?? 'wamv') ? 'selected' : ''}>${m.label}</option>`
+          ).join('')}
+        </select>
       </div>
       <div class="field">
-        <label>Position de base (lat, lon)</label>
-        <input name="base_pos" value="${a.base_pos ?? ''}" placeholder="1.2605 103.7516">
+        <label>Cap <span style="font-weight:400;color:var(--text3)">(°, 0°=Est)</span></label>
+        <input name="heading" type="number" step="any" value="${a.heading ?? 0}" placeholder="0">
       </div>
       <div class="field">
         <label>Vitesse linéaire [min max]</label>
@@ -1416,18 +1562,16 @@ function collectAgents() {
       if (t) mission += ` ${t}`;
     }
 
-    const basePosRaw = g('base_pos');
-    const basePos = basePosRaw ? basePosRaw.trim().split(/\s+/).filter(Boolean) : [];
     data[aname] = {
       x: parseFloat(g('x')) || 0,
       y: parseFloat(g('y')) || 0,
       model: g('model') || 'wamv',
-      base_pos: basePos.length >= 2 ? [parseFloat(basePos[0]), parseFloat(basePos[1])] : null,
+      heading: parseFloat(g('heading')) || 0,
       vel_min: isNaN(vm) ? 0 : vm,
       vel_max: isNaN(vM) ? 5 : vM,
       ang_vel: 0.05,
       conditions: collectConditions(div),
-      mission,
+      mission: mission.trim(),
     };
   });
   return data;
@@ -1547,15 +1691,24 @@ function updateConditions(agentName, taskName, initConds = {}) {
   if (!el) return;
 
   const vars = getTaskCondVars(taskName);
+  for (const arg of getTaskRequiredArgs(taskName)) {
+    const varName = arg.replace(/^__|__$/g, '');
+    if (!vars.has(varName)) {
+      vars.set(varName, '');
+    }
+  }
   if (!vars.size) { el.innerHTML = ''; return; }
 
+  const LOCATION_VARS = new Set(['base_location', 'base_pos', 'base_position']);
   const rows = [];
   for (const [varName, sampleVal] of vars) {
     const isBool = String(sampleVal).toLowerCase() === 'true' || String(sampleVal).toLowerCase() === 'false';
+    const isLoc  = LOCATION_VARS.has(varName);
     const cur = varName in initConds ? initConds[varName] : sampleVal;
     const curStr = String(cur ?? sampleVal);
     const isCurTrue = curStr.toLowerCase() !== 'false' && curStr !== '' && curStr !== '0';
-    const label = varName.replace(/_/g, ' ');
+    const label = varName === 'base_location' ? 'Position de la base'
+                : varName.replace(/_/g, ' ');
 
     if (isBool) {
       rows.push(`
@@ -1565,6 +1718,13 @@ function updateConditions(agentName, taskName, initConds = {}) {
             <option value="true"  ${isCurTrue  ? 'selected' : ''}>Oui</option>
             <option value="false" ${!isCurTrue ? 'selected' : ''}>Non</option>
           </select>
+        </div>`);
+    } else if (isLoc) {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <input name="cond_${escHtml(varName)}" class="cond-inp"
+            placeholder="lat lon  ex: 1.2605 103.7516" value="${escHtml(curStr)}">
         </div>`);
     } else {
       rows.push(`
@@ -1920,13 +2080,17 @@ function loadKB() {
 }
 
 function renderKB(kb) {
-  renderRosSources(kb.ros_sources || []);
-  renderTriggers(kb.event_triggers || []);
+  try { renderRosSources(kb.ros_sources || []); } catch(e) { console.error('renderRosSources:', e); }
+  try { renderTriggers(kb.event_triggers || []); } catch(e) { console.error('renderTriggers:', e); }
 
   const tasksEl = document.getElementById('kb-tasks');
   tasksEl.innerHTML = '';
   for (const [name, def] of Object.entries(kb.tasks || {})) {
-    tasksEl.appendChild(buildTaskCard(name, def));
+    try {
+      tasksEl.appendChild(buildTaskCard(name, def));
+    } catch(e) {
+      console.error(`buildTaskCard(${name}):`, e);
+    }
   }
 
   document.getElementById('kb-leaf').innerHTML = Object.entries(kb.leaf_tasks || {}).map(([k, v]) =>
@@ -2214,7 +2378,9 @@ function addTask() {
 }
 
 function collectKB() {
-  const tasks = {};
+  // Start from kbData.tasks so tasks not currently in the DOM (e.g. AI-generated)
+  // are never silently lost on save.
+  const tasks = Object.assign({}, kbData?.tasks || {});
 
   document.querySelectorAll('#kb-tasks .task-card').forEach(card => {
     const taskName = card.dataset.task;
@@ -2246,17 +2412,22 @@ function collectKB() {
       methods.push({ name, preconditions, subtasks });
     });
 
+    // DOM version overrides kbData version for tasks that are rendered
     tasks[taskName] = { label, methods };
   });
 
   return {
     ros_sources:    collectRosSources(),
     event_triggers: collectTriggers(),
-    // resolve_tokens auto-generated from trigger patterns — not manually configured
-    resolve_tokens: Object.fromEntries(
-      collectTriggers()
-        .filter(t => t.target_pattern && t.sets_variable)
-        .map(t => [_tokenFromVar(t.sets_variable), t.target_pattern])
+    // Preserve existing resolve_tokens and merge with trigger-generated ones
+    resolve_tokens: Object.assign(
+      {},
+      kbData?.resolve_tokens || {},
+      Object.fromEntries(
+        collectTriggers()
+          .filter(t => t.target_pattern && t.sets_variable)
+          .map(t => [_tokenFromVar(t.sets_variable), t.target_pattern])
+      )
     ),
     tasks,
     leaf_tasks:        kbData?.leaf_tasks        || {},
@@ -2278,6 +2449,216 @@ function saveKB() {
         toast('Base de connaissances sauvegardée');
       } else {
         toast('Erreur lors de la sauvegarde');
+      }
+    })
+    .catch(() => toast('Erreur réseau'));
+}
+
+// ── IA Scenario Generator ─────────────────────────────────────────────────────
+let generatedScenarioData = null;
+let lastAIDescription = '';
+
+function showAIStatus(msg, isError = false) {
+  const el = document.getElementById('ia-status');
+  const msgEl = document.getElementById('ia-status-msg');
+  el.style.display = 'block';
+  el.style.background = isError ? '#FDECEA' : '#EBF7EE';
+  el.style.borderLeft = `4px solid ${isError ? 'var(--red)' : 'var(--green)'}`;
+  msgEl.textContent = msg;
+  msgEl.style.color = isError ? 'var(--red)' : 'var(--green)';
+}
+
+function showClarificationQuestions(questions) {
+  document.getElementById('ia-clarify-questions').innerHTML =
+    questions.map(q => `<li>${escHtml(q)}</li>`).join('');
+  document.getElementById('ia-clarify-answer').value = '';
+  document.getElementById('ia-clarify').style.display = 'block';
+}
+
+function submitClarificationAnswer() {
+  const answer = document.getElementById('ia-clarify-answer').value.trim();
+  if (!answer) {
+    toast('Veuillez répondre aux questions');
+    return;
+  }
+  const enriched = `${lastAIDescription}\n\nPrécisions supplémentaires : ${answer}`;
+  document.getElementById('ia-description').value = enriched;
+  document.getElementById('ia-clarify').style.display = 'none';
+  generateScenarioFromAI(enriched);
+}
+
+function generateScenarioFromAI(descriptionOverride) {
+  const description = (descriptionOverride ?? document.getElementById('ia-description').value).trim();
+  if (!description) {
+    toast('Veuillez entrer une description');
+    return;
+  }
+  lastAIDescription = description;
+
+  document.getElementById('ia-clarify').style.display = 'none';
+  showAIStatus('⏳ Génération en cours... (peut prendre 30-60 sec)', false);
+  document.getElementById('ia-result').style.display = 'none';
+
+  fetch('/api/generate-scenario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showAIStatus(`❌ Erreur: ${data.error}. ${data.details || ''}`, true);
+        toast('Erreur lors de la génération');
+        return;
+      }
+
+      if (data.needs_clarification) {
+        showAIStatus('❓ Précisions nécessaires avant de générer le scénario', false);
+        showClarificationQuestions(data.questions || []);
+        return;
+      }
+
+      generatedScenarioData = data;
+      displayGeneratedScenario(data);
+      showAIStatus('✅ Scénario généré avec succès!', false);
+
+      // KB may have been updated server-side — refresh so dropdown and KB tab stay in sync
+      if ((data.kb_updates?.added_tasks?.length || 0) > 0 || (data.kb_updates?.added_methods?.length || 0) > 0) {
+        fetch('/api/kb').then(r => r.json()).then(kb => {
+          kbData = kb;
+          refreshTaskCatalog(kb);
+        });
+      }
+    })
+    .catch(err => {
+      showAIStatus(`❌ Erreur: ${err.message}`, true);
+      toast('Erreur réseau');
+    });
+}
+
+function displayGeneratedScenario(data) {
+  // Display agents
+  const agentsList = document.getElementById('ia-agents-list');
+  const agents = data.scenario?.agents || {};
+  if (Object.keys(agents).length === 0) {
+    agentsList.innerHTML = '<em style="color:var(--text3)">Aucun agent généré</em>';
+  } else {
+    agentsList.innerHTML = Object.entries(agents).map(([name, a]) => {
+      const isIntruder = a.role === 'intruder' || a.conditions?.is_intruder;
+      const encircleRole = a.conditions?.encircle_role;
+      return `
+      <div style="padding:8px;margin-bottom:8px;background:var(--surface);border:1px solid ${isIntruder ? 'var(--red)' : 'var(--border)'};border-radius:4px;font-size:12px">
+        <strong>${escHtml(name)}</strong> ${isIntruder ? '🚩 intrus' : ''} |
+        Rôle: ${escHtml(a.role || 'unknown')}${encircleRole ? ' (' + escHtml(encircleRole) + ')' : ''} |
+        Pos: (${a.x?.toFixed(2) || '0'}, ${a.y?.toFixed(2) || '0'}) |
+        Modèle: ${escHtml(a.model || 'wamv')}
+      </div>
+    `;
+    }).join('');
+  }
+
+  // Display tasks
+  const tasksList = document.getElementById('ia-tasks-list');
+  const tasks = data.scenario?.mission || [];
+  if (tasks.length === 0) {
+    tasksList.innerHTML = '<em style="color:var(--text3)">Aucune tâche générée</em>';
+  } else {
+    tasksList.innerHTML = tasks.map(t => `
+      <div style="padding:8px;margin-bottom:6px;background:var(--surface);border-left:3px solid var(--blue);padding-left:10px;font-size:12px">
+        <div><strong>${escHtml(typeof t === 'string' ? t : t[0])}</strong></div>
+      </div>
+    `).join('');
+  }
+
+  // Display warnings
+  const warnings = data.warnings || [];
+  const issues = data.issues || {};
+  const kbUpdates = data.kb_updates || {};
+  const warningsDiv = document.getElementById('ia-warnings');
+  const warningsList = document.getElementById('ia-warnings-list');
+  
+  const allWarnings = [...warnings, ...(issues.missing_tasks || []), ...(issues.warnings || [])];
+  if (allWarnings.length === 0) {
+    warningsDiv.style.display = 'none';
+  } else {
+    warningsDiv.style.display = 'block';
+    warningsList.innerHTML = allWarnings.map(w => `<li>${escHtml(w)}</li>`).join('');
+  }
+
+  const kbUpdatesDiv = document.getElementById('ia-kb-updates');
+  const updateLines = [];
+  if (kbUpdates.added_tasks?.length) {
+    updateLines.push(`<div><strong>Tâches ajoutées :</strong> ${kbUpdates.added_tasks.map(escHtml).join(', ')}</div>`);
+  }
+  if (kbUpdates.added_methods?.length) {
+    updateLines.push(`<div><strong>Méthodes ajoutées :</strong> ${kbUpdates.added_methods.map(u => escHtml(`${u.task}:${u.method}`)).join(', ')}</div>`);
+  }
+  kbUpdatesDiv.innerHTML = updateLines.length ? updateLines.join('') : '<em style="color:var(--text3)">Aucune mise à jour de KB</em>';
+
+  // Pre-fill scenario name with the server-generated slug, but keep it editable
+  const rawName = (data.scenario?.name || 'scenario_ia').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  document.getElementById('ia-scenario-name').value = rawName;
+
+  // Show result
+  document.getElementById('ia-result').style.display = 'block';
+  document.getElementById('ia-result').scrollIntoView({ behavior: 'smooth' });
+}
+
+function importGeneratedScenario() {
+  if (!generatedScenarioData) {
+    toast('Aucun scénario généré');
+    return;
+  }
+
+  const scenario = generatedScenarioData.scenario || {};
+
+  // Use the user-edited name field, fallback to server slug
+  const rawName = document.getElementById('ia-scenario-name').value.trim()
+                  || scenario.name || 'scenario_ia';
+  // Sanitize: lowercase, spaces → underscores, only alphanum+underscore
+  const scenarioName = rawName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+  // Build mission string: first item of the array (e.g. "encircle_target __self__")
+  const missionStr = Array.isArray(scenario.mission)
+    ? (scenario.mission[0] || 'veille __self__')
+    : (scenario.mission || 'veille __self__');
+
+  // Prepare agents for import
+  const agents = {};
+  for (const [name, a] of Object.entries(scenario.agents || {})) {
+    // Per-agent mission if provided, otherwise use the scenario-level mission.
+    // "__self__" is a placeholder the AI uses for "this agent's own name" — substitute it now.
+    const agentMission = (a.mission || missionStr).replace(/__self__/g, name);
+    agents[name] = {
+      x: a.x || 0,
+      y: a.y || 0,
+      model: a.model || 'wamv',
+      heading: a.heading || 0,
+      vel_min: 0,
+      vel_max: a.velocity || 5,
+      ang_vel: 0.05,
+      conditions: a.conditions || {},
+      mission: agentMission,
+    };
+  }
+
+  // Save via API
+  fetch(`/api/scenario/${scenarioName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(agents)
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        toast(`✅ Scénario importé : ${scenarioName}`);
+        setTimeout(() => {
+          switchTab('scenarios');
+          loadList();
+          selectScenario(scenarioName);
+        }, 500);
+      } else {
+        toast('Erreur lors de l\'import');
       }
     })
     .catch(() => toast('Erreur réseau'));

@@ -1,7 +1,10 @@
+import math
+
 import gtpyhop
 
 
-def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angular_velocities_limits):
+def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angular_velocities_limits,
+                  heading=0.0):
     from rclpy.action import ActionClient
     from geographic_msgs.msg import GeoPoint
     from lotusim_msgs.msg import MASCmd as MASCmdMsg
@@ -16,6 +19,9 @@ def spawn_vessel(node, vessel, init_pos, model, linear_velocities_limits, angula
     cmd.model_name  = model
     cmd.vessel_name = vessel
     cmd.geo_point   = GeoPoint(latitude=init_pos[0], longitude=init_pos[1], altitude=0.0)
+    # MASCmd.heading is a top-level field (radians, used directly as yaw by entity_spawner.cpp) —
+    # not an SDF tag. `heading` here is in degrees (matching the scenario/UI convention), so convert.
+    cmd.heading     = math.radians(heading)
     cmd.sdf_string  = f"""
         <lotus_param>
             <waypoint_follower>
