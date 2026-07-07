@@ -775,6 +775,18 @@ header {
 }
 .prec-val-inp:focus { outline: none; border-color: var(--blue); }
 
+.prec-thresholdvar-inp {
+  width: 140px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-thresholdvar-inp:focus { outline: none; border-color: var(--blue); }
+
 .prec-var-inp {
   flex: 1;
   min-width: 0;
@@ -2119,6 +2131,17 @@ function buildPrecondRow(cond) {
   field2Inp.className = 'prec-val-inp';
   field2Inp.value = kind === 'distance' ? (norm.threshold ?? '') : (norm.value ?? '');
 
+  // Optional per-agent override key for a distance threshold (e.g. "eviter_threshold")
+  // — bdd/tasks_methods.py::_check reads conditions.<threshold_var> on the asking
+  // agent first, falling back to the literal threshold above when unset. Only
+  // meaningful for distance preconditions; collectKB() must round-trip this even
+  // when left blank as "" (omitted), otherwise every KB autosave silently erases it.
+  const thresholdVarInp = document.createElement('input');
+  thresholdVarInp.className = 'prec-thresholdvar-inp';
+  thresholdVarInp.placeholder = 'variable de seuil (optionnel)';
+  thresholdVarInp.title = 'Nom de condition qui, si présent sur l\'agent, remplace le seuil ci-dessus (ex: eviter_threshold)';
+  thresholdVarInp.value = norm.threshold_var || '';
+
   function rebuildField1() {
     const k = PRECOND_KIND[opSel.value] || 'state';
     field1Wrap.innerHTML = '';
@@ -2139,6 +2162,7 @@ function buildPrecondRow(cond) {
     field2Inp.style.display = k === 'present' ? 'none' : '';
     field2Inp.placeholder = k === 'distance' ? 'seuil (degrés, ex 0.003)' : 'valeur';
     field2Inp.type = k === 'distance' ? 'number' : 'text';
+    thresholdVarInp.style.display = k === 'distance' ? '' : 'none';
   }
   opSel.addEventListener('change', applyKindUI);
   applyKindUI();
@@ -2149,7 +2173,7 @@ function buildPrecondRow(cond) {
   del.textContent = '×';
   del.addEventListener('click', e => { e.stopPropagation(); row.remove(); saveKB(); });
 
-  row.append(opSel, field1Wrap, field2Inp, del);
+  row.append(opSel, field1Wrap, field2Inp, thresholdVarInp, del);
   return row;
 }
 
@@ -2329,10 +2353,13 @@ function collectKB() {
         const type   = pr.querySelector('.prec-type-sel').value;
         const field1 = pr.querySelector('.prec-var-inp').value.trim();
         const field2 = pr.querySelector('.prec-val-inp').value.trim();
+        const thresholdVar = pr.querySelector('.prec-thresholdvar-inp')?.value.trim();
         const kind   = PRECOND_KIND[type] || 'state';
         if (!field1) return;
         if (kind === 'distance') {
-          preconditions.push({ type, target: field1, threshold: parseFloat(field2) || 0 });
+          const cond = { type, target: field1, threshold: parseFloat(field2) || 0 };
+          if (thresholdVar) cond.threshold_var = thresholdVar;
+          preconditions.push(cond);
         } else if (kind === 'present') {
           preconditions.push({ type, variable: field1 });
         } else {

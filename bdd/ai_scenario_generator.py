@@ -61,13 +61,18 @@ _TOP_LEVEL_MISSIONS = {
               "base. Pour un évitement mutuel entre deux agents ordinaires, assigner \"eviter\" "
               "aux deux, chacun ayant l'autre comme \"cible\" (conditions.cible) — contrairement à "
               "\"suivre_agent\", ne nécessite PAS un agent role:\"intruder\".",
+    "encercler": "S'approche de la cible puis, une fois assez proche (~1km), tourne en cercle "
+                 "autour d'elle au lieu de faire demi-tour — pour \"tourne autour\"/\"fait des "
+                 "cercles\"/\"orbite\". Même mécanique que \"eviter\" (conditions.cible, pas besoin "
+                 "de role:\"intruder\") mais réaction différente une fois proche.",
 }
 
 _MISSION_KEYWORDS = [
     'patrouil', 'patrol', 'surveill', 'garde', 'guard', 'chasse', 'chase', 'base',
     'defend', 'defen', 'suivre', 'follow', 'poursuit', 'pursue', 'zone', 'secteur',
     'drone', 'reconnaissance', 'recon', 'rentr', 'retour', 'return', 'eviter', 'evite',
-    'avoid', 'demi-tour', 'demi tour', 'recule', 'reculer',
+    'avoid', 'demi-tour', 'demi tour', 'recule', 'reculer', 'cercle', 'cercl', 'encercl',
+    'orbit', 'tourne autour', 'circle',
 ]
 
 
@@ -159,6 +164,32 @@ def _extract_json_from_response(text: str) -> Dict[str, Any]:
         return {}
 
 
+def _sanitize_parsed(parsed: Dict[str, Any], warnings: List[str]) -> None:
+    """
+    Mutates `parsed` in place so every downstream consumer (validation,
+    agent-building, KB enrichment) can assume "agents" and "suggested_methods"
+    are lists of dicts, never anything else — a 7B local model at low
+    temperature still occasionally returns a list of bare strings instead of
+    objects (e.g. "suggested_methods": ["eviter"]) for a freeform field like
+    this one. Dropping the malformed entries (with a warning) keeps the rest
+    of a still-usable response instead of crashing the whole generation on
+    one bad field.
+    """
+    for key in ("agents", "suggested_methods"):
+        raw = parsed.get(key)
+        if not isinstance(raw, list):
+            if raw is not None:
+                warnings.append(f'IA : champ "{key}" invalide (attendu une liste) — ignoré.')
+                parsed[key] = []
+            continue
+        kept = [item for item in raw if isinstance(item, dict)]
+        if len(kept) != len(raw):
+            warnings.append(
+                f'IA : {len(raw) - len(kept)} élément(s) mal formé(s) dans "{key}" ignoré(s).'
+            )
+            parsed[key] = kept
+
+
 def _ensure_agent_exists(kb: Dict[str, Any], agent_name: str, role: str = "") -> None:
     """Ensure agent is in resolve_tokens mapping."""
     if agent_name not in kb.get("resolve_tokens", {}):
@@ -208,6 +239,19 @@ def _mentions_intruder(description: str) -> bool:
     return False
 
 
+_PASSIVE_AGENT_PATTERN = re.compile(
+    r"ne\s+fai(?:s|t)\s+rien|ne\s+fait\s+aucune|reste\s+(?:immobile|en\s+place|passif|sur\s+place)|"
+    r"n['\s]agit\s+pas|ne\s+bouge\s+pas|(?<!\w)inactif|(?<!\w)passif|standby|"
+    r"does\s+nothing|stays?\s+(?:put|still|idle)",
+    re.IGNORECASE,
+)
+
+
+def _mentions_passive_agent(description: str) -> bool:
+    """True if the text explicitly says at least one agent does nothing / stays put."""
+    return bool(_PASSIVE_AGENT_PATTERN.search(description))
+
+
 _INTRUDER_NOUN_PATTERN = (
     r'(?:intrus\w*|ennemis?|cibles?|menaces?|adversaires?|envahisseurs?|'
     r'intruders?|enem(?:y|ies)|targets?|threats?|trespassers?)'
@@ -232,43 +276,80 @@ def _expected_intruder_count(description: str) -> int:
     return 1
 
 
+_METERS_PER_DEGREE = 111_320  # good enough at this world's latitude for a UI-level threshold
+
+_DISTANCE_PATTERN = re.compile(
+    r'(\d+(?:[.,]\d+)?)\s*(kilom[eè]tres?|km|m[eè]tres?|m)(?![a-zàâäéèêëïîôöùûüç])'
+)
+
+
+def _expected_avoid_distance_deg(description: str) -> Optional[float]:
+    """
+    Best-effort extraction of an explicit distance threshold from the text
+    (e.g. "100m", "moins de 100 m", "500 mètres", "1km") — numeric precision
+    is where the LLM is least reliable (same reasoning as _clamp_coord for
+    positions), so this is computed deterministically from the raw text
+    instead of trusted from the model's JSON output. Returns degrees, or
+    None if no distance is mentioned.
+    """
+    m = _DISTANCE_PATTERN.search(description.lower().replace(',', '.'))
+    if not m:
+        return None
+    value = float(m.group(1))
+    unit = m.group(2)
+    meters = value * 1000 if unit.startswith('k') else value
+    return meters / _METERS_PER_DEGREE
+
+
 def _strip_accents(text: str) -> str:
     return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
 
 
 def _has_actionable_signal(description: str) -> bool:
     """
-    True if the description gives at least one concrete, checkable fact to build
-    a scenario from (an agent count, a named agent, an intruder, or a known mission
-    keyword). If none of these are present, the text is too vague to trust the LLM
-    with — it tends to hallucinate a plausible-looking scenario instead of admitting
-    it doesn't know, so we ask the user directly rather than call it at all.
+    True only if the description says something about WHAT the agents should
+    DO (a known mission keyword, or an intruder/threat to react to) — a bare
+    agent count or name ("agent 1", "agent1") on its own says nothing about
+    behavior and used to count as "signal", which let something like
+    "test\nagent 1\nagent 2" (no behavior at all, just two numbered labels)
+    through to the LLM. With nothing real to ground itself on, it invents a
+    plausible-looking scenario anyway (and, given how much prompt real estate
+    a mission like "eviter"/"encercler" occupies with worked examples, tends
+    to anchor on whichever mission the prompt discusses most, regardless of
+    fit) instead of admitting it doesn't know — so ask the user directly
+    rather than call it at all whenever there's no behavioral signal.
     """
-    if _expected_agent_count(description) is not None:
-        return True
     if _mentions_intruder(description):
         return True
     text = _strip_accents(description.lower())
-    if re.search(r'\bagent\d+\b', text):
-        return True
     return any(kw in text for kw in _MISSION_KEYWORDS)
 
 
-def _is_intruder_agent(agent_data: Dict[str, Any]) -> bool:
+def _is_intruder_agent(agent_data: Any) -> bool:
+    if not isinstance(agent_data, dict):
+        return False
     role = str(agent_data.get('role', '')).strip().lower()
-    conditions = agent_data.get('conditions', {}) or {}
+    conditions = agent_data.get('conditions') or {}
+    if not isinstance(conditions, dict):
+        conditions = {}
     return role == 'intruder' or bool(conditions.get('is_intruder'))
 
 
-def _is_drone_agent(agent_data: Dict[str, Any]) -> bool:
+def _is_drone_agent(agent_data: Any) -> bool:
     """A companion drone that tracks the cible on its own (mission "suivre_agent")."""
+    if not isinstance(agent_data, dict):
+        return False
     return str(agent_data.get('role', '')).strip().lower() == 'drone'
 
 
-def _is_zone_agent(agent_data: Dict[str, Any]) -> bool:
+def _is_zone_agent(agent_data: Any) -> bool:
     """A "__zone__" landmark — a fixed position + radius, not a moving contact."""
+    if not isinstance(agent_data, dict):
+        return False
     role = str(agent_data.get('role', '')).strip().lower()
-    conditions = agent_data.get('conditions', {}) or {}
+    conditions = agent_data.get('conditions') or {}
+    if not isinstance(conditions, dict):
+        conditions = {}
     return role == 'zone' or bool(conditions.get('is_zone'))
 
 
@@ -378,8 +459,18 @@ Rules (follow strictly):
    - "suivre_agent" and "reconnaissance" both require at least one "intruder" agent to exist in
      the scenario (see rule 3) — do not assign either mission if there is no cible to track.
    - "eviter" does NOT need an "intruder" agent — it tracks whichever other agent is nearest by
-     default. For MUTUAL avoidance between two ordinary agents (no intruder in the description at
-     all), assign "eviter" to both.
+     default. For MUTUAL avoidance between two ordinary agents (both approach and both turn back),
+     assign "eviter" to both. For ONE-SIDED avoidance (one agent explicitly does nothing / stays
+     put, only the OTHER approaches and turns back), assign "eviter" ONLY to the one that moves —
+     the passive one gets "veiller", never "eviter". Example: "Agent 1: ne fait rien. Agent 2: va
+     vers agent 1 et fait demi-tour si trop proche." → agent1 mission "veiller __self__", agent2
+     mission "eviter __self__". Do NOT give the passive agent "eviter" just because it's the other
+     agent's target.
+   - "encercler" works exactly like "eviter" (same "does NOT need intruder" / "one-sided vs mutual"
+     / "passive agent gets veiller, never the active mission" rules above) — use it INSTEAD of
+     "eviter" whenever the description says the moving agent circles/orbits/turns around the other
+     once close, rather than turning back away from it. Never invent a new task for this — it
+     already exists.
 5. "conditions" is a free per-agent state dict — for acting agents, leave it {{}} empty UNLESS
    rule 4 says to set "drone_available".
 6. Give each agent a unique x/y position (lat 1.25-1.30, lon 103.74-103.80).
@@ -419,7 +510,7 @@ Rules (follow strictly):
 
 
 def _parse_scenario_from_description(
-    description: str
+    description: str, kb: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
     Parse natural language description into structured scenario, self-correcting
@@ -444,6 +535,8 @@ def _parse_scenario_from_description(
         if parsed.get("needs_clarification") or parsed.get("cannot_model"):
             return parsed, warnings
 
+        _sanitize_parsed(parsed, warnings)
+
         agents = parsed.get("agents") or []
         acting = [a for a in agents if not _is_auxiliary_agent(a)]
         intruders = [a for a in agents if _is_intruder_agent(a)]
@@ -464,9 +557,30 @@ def _parse_scenario_from_description(
             not _is_auxiliary_agent(a) and _normalize_mission(a.get('mission'), suggested_task_names) is None
             for a in acting
         )
+        # The description explicitly says at least one agent does nothing, but no
+        # acting agent actually got "veiller" — most often the LLM giving every
+        # acting agent the SAME active mission instead of singling one out as
+        # passive (e.g. inventing a symmetric "suggested_methods" task applied to
+        # both, ignoring which one was supposed to stay put).
+        missing_passive_agent = (
+            len(acting) >= 2
+            and _mentions_passive_agent(description)
+            and not any(_normalize_mission(a.get('mission'), suggested_task_names) == 'veiller' for a in acting)
+        )
+        # Structural problems in any proposed "suggested_methods" entry (see
+        # _validate_suggested_method) — e.g. a precondition checking distance to
+        # "__self__", or a subtask with the wrong arg count / an unresolvable
+        # "__token__". Left uncaught, these get written to knowledge_base.json as
+        # a task that LOOKS legitimate but silently never fires.
+        suggestion_problems = {
+            s.get('task', '').strip(): _validate_suggested_method(s, kb, suggested_task_names)
+            for s in (parsed.get('suggested_methods') or [])
+            if isinstance(s, dict) and s.get('task', '').strip()
+        }
+        bad_suggestion = any(probs for probs in suggestion_problems.values())
 
-        if (count_wrong or intruder_count_wrong or drone_without_cible or bad_mission) \
-                and attempt < MAX_RETRIES:
+        if (count_wrong or intruder_count_wrong or drone_without_cible or bad_mission
+                or missing_passive_agent or bad_suggestion) and attempt < MAX_RETRIES:
             problems = []
             if count_wrong:
                 problems.append(
@@ -491,10 +605,55 @@ def _parse_scenario_from_description(
                     f"doesn't match (a name from your own \"suggested_methods\" is fine too, "
                     f"as long as it's spelled exactly the same)"
                 )
+            if missing_passive_agent:
+                problems.append(
+                    "the description explicitly says at least one agent does NOTHING, but "
+                    "you gave every acting agent the same active mission — pick exactly which "
+                    "agent is the passive one and give ONLY that agent \"mission\": "
+                    "\"veiller __self__\"; give the other(s) their real active mission "
+                    "(e.g. \"eviter __self__\" targeting the passive agent), never invent a "
+                    "new symmetric task that applies to both"
+                )
+            if bad_suggestion:
+                for task_name, probs in suggestion_problems.items():
+                    for p in probs:
+                        problems.append(f'"suggested_methods" task "{task_name}": {p}')
             feedback = "; ".join(problems) + ". Regenerate the full JSON now with the exact counts stated above."
             continue
 
         break
+
+    # Still broken after exhausting every retry: refuse instead of silently
+    # substituting a fallback behavior (e.g. an agent quietly downgraded to
+    # "veiller" because its real mission never resolved to anything that
+    # would actually work) — a scenario that LOOKS complete but secretly
+    # doesn't do what was asked is worse than a clear "can't do this".
+    # count_wrong/intruder_count_wrong are NOT included here: those get a
+    # deterministic, behavior-preserving fix downstream (_pad_missing_agents /
+    # _make_default_intruder clone/synthesize an agent to match a headcount —
+    # not a guess about what it should DO), unlike the cases below, which are
+    # all "the requested behavior itself doesn't work".
+    if bad_mission or missing_passive_agent or bad_suggestion or drone_without_cible:
+        reasons = []
+        if bad_mission:
+            reasons.append("au moins un agent n'a pas de mission exploitable (ni une mission "
+                            "prédéfinie, ni une tâche personnalisée correctement définie)")
+        if missing_passive_agent:
+            reasons.append("la description indique qu'au moins un agent ne fait rien, mais "
+                            "aucun agent généré n'a la mission \"veiller\"")
+        if bad_suggestion:
+            broken = ", ".join(sorted(t for t, p in suggestion_problems.items() if p))
+            reasons.append(f"la tâche personnalisée proposée (\"{broken}\") est mal formée et ne "
+                            f"fonctionnerait pas telle quelle")
+        if drone_without_cible:
+            reasons.append("un agent drone a été proposé sans intrus/cible à suivre")
+        return {
+            "cannot_model": True,
+            "reason": (
+                f"Je n'ai pas réussi à générer un scénario qui fonctionne réellement pour cette "
+                f"description après {MAX_RETRIES + 1} tentative(s) : " + "; ".join(reasons) + "."
+            ),
+        }, warnings
 
     if not parsed.get("agents"):
         parsed["agents"] = []
@@ -547,6 +706,92 @@ def _make_default_intruder(agents: List[Dict[str, Any]], index: int = 1) -> Dict
     }
 
 
+# Tokens with a well-defined resolution path (bdd/tasks_methods.py::_resolve /
+# _resolve_agent_token) — "__self__" plus every entry from resolve_tokens are
+# always safe. Anything else shaped like "__xxx__" either matches a role/kind/
+# "is_xxx" marker at runtime (fine, but not statically checkable here) or
+# silently resolves to nothing / a coincidental literal string — the two
+# failure modes behind every broken "suggested_methods" task seen so far
+# ("dance": distance to "__self__" is always 0 → precondition never true;
+# "avoidance": "__agent1__"/"__agent2__" match no role/marker → precondition
+# always false, and the literal fallback only rescues subtask ARGS, not
+# precondition targets, so the two behave inconsistently for the same typo).
+_KNOWN_SPECIAL_TOKENS = {
+    '__self__', '__cible__', '__base_location__', '__base_position__',
+    '__destination__', '__zone__', '__drone__', '__any__', '__intruder__',
+}
+
+
+def _validate_suggested_method(
+    suggestion: Dict[str, Any], kb: Dict[str, Any], sibling_task_names: set
+) -> List[str]:
+    """
+    Structural sanity checks on one LLM-proposed "suggested_methods" entry.
+    Catches the recurring failure modes in practice — a precondition checking
+    an agent's distance to itself, a subtask calling a task with the wrong
+    number of args for its real arity, or referencing an unregistered
+    "__made_up_token__" — BEFORE it's written to knowledge_base.json, instead
+    of discovering it later as a task that silently never does anything.
+    Returns a list of human-readable problems; empty means it looks sound.
+    """
+    problems: List[str] = []
+    leaf_tasks = kb.get('leaf_tasks', {}) or {}
+    composite_tasks = set(kb.get('tasks', {}) or {}) | sibling_task_names
+    known_tokens = set(_KNOWN_SPECIAL_TOKENS) | set(kb.get('resolve_tokens', {}) or {})
+
+    def _is_bad_token(value: Any) -> bool:
+        return (
+            isinstance(value, str) and value.startswith('__') and value.endswith('__')
+            and value not in known_tokens
+        )
+
+    for cond in suggestion.get('preconditions', []) or []:
+        if not isinstance(cond, dict):
+            problems.append('a precondition is not an object')
+            continue
+        if cond.get('type') in ('distance_below', 'distance_above'):
+            target = cond.get('target')
+            if target == '__self__':
+                problems.append(
+                    'a distance precondition targets "__self__" — distance to itself is '
+                    'always 0, never a useful trigger; target another agent (e.g. "__cible__")'
+                )
+            elif _is_bad_token(target):
+                problems.append(
+                    f'precondition target "{target}" is not a recognized token (use '
+                    f'"__cible__"/"__zone__"/"__drone__"/"__any__"/"__base_location__", or a '
+                    f'literal agent name)'
+                )
+
+    for st in suggestion.get('subtasks', []) or []:
+        if not isinstance(st, dict):
+            problems.append('a subtask is not an object')
+            continue
+        task_name = str(st.get('task', '')).strip()
+        args = st.get('args', []) or []
+        if not isinstance(args, list):
+            problems.append(f'subtask "{task_name}" has non-list "args"')
+            continue
+        if task_name in leaf_tasks:
+            expected = len(leaf_tasks[task_name].get('args', []) or [])
+            if expected and len(args) != expected:
+                problems.append(
+                    f'subtask "{task_name}" is a leaf task expecting {expected} arg(s), got {len(args)}'
+                )
+        elif task_name in composite_tasks or task_name in _TOP_LEVEL_MISSIONS:
+            if args != ['__self__']:
+                problems.append(
+                    f'subtask "{task_name}" is a composite task — it always takes exactly '
+                    f'["__self__"] as args (its OWN preconditions/subtasks then resolve the '
+                    f'real target), got {args!r}'
+                )
+        for arg in args:
+            if _is_bad_token(arg):
+                problems.append(f'subtask "{task_name}" arg "{arg}" is not a recognized token')
+
+    return problems
+
+
 def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[str, Any]:
     """
     Add new tasks and methods to KB based on parsed suggestions.
@@ -557,9 +802,23 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
         "added_methods": []
     }
 
+    sibling_task_names = {
+        s.get('task', '').strip()
+        for s in (parsed.get('suggested_methods') or [])
+        if isinstance(s, dict) and s.get('task', '').strip()
+    }
+
     for suggestion in parsed.get("suggested_methods", []):
+        if not isinstance(suggestion, dict):
+            continue
         task_name = suggestion.get("task", "").strip()
         if not task_name:
+            continue
+        # Defense in depth — _parse_scenario_from_description already filters
+        # broken suggestions out via _validate_suggested_method, but never write
+        # one to the KB regardless of caller (e.g. a future path passing its own
+        # existing_kb straight to this function).
+        if _validate_suggested_method(suggestion, kb, sibling_task_names):
             continue
 
         method = {
@@ -627,8 +886,9 @@ def generate_scenario_from_description(
     try:
         expected_count = _expected_agent_count(description)
         intruder_count = _expected_intruder_count(description)
+        avoid_distance_deg = _expected_avoid_distance_deg(description)
 
-        parsed, retry_warnings = _parse_scenario_from_description(description)
+        parsed, retry_warnings = _parse_scenario_from_description(description, kb)
         warnings.extend(retry_warnings)
 
         # Task names this response also defines via "suggested_methods" — a valid
@@ -729,9 +989,26 @@ def generate_scenario_from_description(
                 agent_entry["mission"] = "suivre_agent __self__"
                 agent_entry["resolved_task"] = ["suivre_agent"]
             else:
-                mission_task = _normalize_mission(agent_data.get("mission"), suggested_task_names) or "veiller"
+                mission_task = _normalize_mission(agent_data.get("mission"), suggested_task_names)
+                if mission_task is None:
+                    # Should be unreachable: _parse_scenario_from_description already
+                    # refuses (cannot_model) whenever any acting agent's mission
+                    # doesn't resolve. No silent "veiller" substitute here — surface
+                    # it as a bug rather than quietly generating the wrong behavior.
+                    raise Exception(
+                        f'Agent "{name}" a une mission non résolue ("{agent_data.get("mission")}") — '
+                        f'ceci ne devrait jamais arriver ici (bad_mission aurait dû être détecté plus tôt).'
+                    )
                 agent_entry["mission"] = f"{mission_task} __self__"
                 agent_entry["resolved_task"] = [mission_task]
+                # Description gave an explicit distance (e.g. "100m") — apply it to
+                # this agent's "eviter"/"encercler" threshold instead of the KB-wide
+                # default; never trust the LLM's own JSON for this number (see
+                # _expected_avoid_distance_deg).
+                if mission_task == "eviter" and avoid_distance_deg is not None:
+                    conditions.setdefault("eviter_threshold", avoid_distance_deg)
+                elif mission_task == "encercler" and avoid_distance_deg is not None:
+                    conditions.setdefault("encercler_threshold", avoid_distance_deg)
 
             agents[name] = agent_entry
             _ensure_agent_exists(kb, name, role)
@@ -746,7 +1023,7 @@ def generate_scenario_from_description(
         intruder_names = [n for n, a in agents.items() if a['role'] == 'intruder']
         drone_names = [n for n, a in agents.items() if a['role'] == 'drone']
         zone_names = [n for n, a in agents.items() if a['role'] == 'zone']
-        for a in agents.values():
+        for aname, a in agents.items():
             mission_task = (a.get('resolved_task') or [None])[0]
             if mission_task in ('suivre_agent', 'reconnaissance') and len(intruder_names) == 1:
                 a['conditions'].setdefault('cible', intruder_names[0])
@@ -754,6 +1031,13 @@ def generate_scenario_from_description(
                 a['conditions'].setdefault('drone', drone_names[0])
             if mission_task == 'surveiller_zone' and len(zone_names) == 1:
                 a['conditions'].setdefault('zone', zone_names[0])
+            if mission_task in ('eviter', 'encercler'):
+                # Both target an ORDINARY agent, not a role-marked one — so their
+                # "unambiguous" case is "exactly one other agent in the whole
+                # scenario", computed per-agent (excluding itself and zone markers).
+                others = [n for n in agents if n != aname and n not in zone_names]
+                if len(others) == 1:
+                    a['conditions'].setdefault('cible', others[0])
 
         # Enrich KB with new methods/tasks
         kb_updates = _enrich_kb_with_methods(kb, parsed)

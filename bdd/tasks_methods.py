@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import gtpyhop
@@ -31,8 +32,17 @@ def _check(cond, agent, state):
         target_pos = state.agents.get(target_name, {}).get('pos')
         if not self_pos or not target_pos:
             return False
+        # "threshold_var" (optional): this agent's own conditions can override the
+        # KB's default distance via a named field (e.g. conditions.eviter_threshold),
+        # for scenarios needing a specific distance (e.g. "moins de 100m") that the
+        # KB-wide default doesn't match. Falls back to the literal "threshold" when
+        # unset — existing methods without "threshold_var" are unaffected.
+        threshold_var = cond.get('threshold_var')
+        raw_threshold = cond.get('threshold', 0)
+        if threshold_var and ag.get(threshold_var) not in (None, ''):
+            raw_threshold = ag.get(threshold_var)
         try:
-            threshold = float(cond.get('threshold', 0))
+            threshold = float(raw_threshold)
         except (TypeError, ValueError):
             return False
         dist = distance_deg(self_pos, target_pos)
@@ -281,6 +291,19 @@ def resolve_watched_agents(state, agent, tokens):
 
 
 # ── Méthodes feuilles (locked — logique de mouvement) ────────────────────────
+#
+# Idempotency guard convention: once the same waypoint has already been sent
+# (agent's last_waypoint is still within MIN_MOVE_DEG of the intended target),
+# these return [] — an empty-but-SUCCESSFUL decomposition — never False.
+# GTPyhop treats the two very differently (gtpyhop.py::_refine_task_and_continue:
+# "subtasks != False and subtasks != None" is what counts as applicable): False
+# means "this method doesn't apply, try the task's NEXT method" and can cascade
+# into a sibling method firing instead (e.g. suivre_agent's 2nd method — chase —
+# taking over every other cycle because its 1st method — return to base —
+# looked like it "failed" merely because the base waypoint was already in
+# flight), producing a visible oscillation instead of a boat that just keeps
+# going where it was already told to go. Only a genuinely missing target
+# (pos is None) is a real failure and stays False.
 
 def aller_a_agent_m(state, agent, target):
     pos = state.agents.get(target, {}).get('pos')
@@ -288,7 +311,7 @@ def aller_a_agent_m(state, agent, target):
         return False
     last = state.agents[agent].get('last_waypoint')
     if last and in_zone({'lat': last[0], 'lon': last[1]}, pos, MIN_MOVE_DEG):
-        return False
+        return []
     return [('aller_a', agent, (pos['lat'], pos['lon']))]
 
 
@@ -298,7 +321,7 @@ def suivre_m(state, agent, target):
         return False
     last = state.agents[agent].get('last_waypoint')
     if last and in_zone({'lat': last[0], 'lon': last[1]}, pos, MIN_MOVE_DEG):
-        return False
+        return []
     return [('aller_a', agent, (pos['lat'], pos['lon']))]
 
 
@@ -310,12 +333,70 @@ def maintenir_contact_m(state, agent, target):
     last = state.agents[agent].get('last_waypoint')
     if last and in_zone({'lat': last[0], 'lon': last[1]},
                         {'lat': follow_pos[0], 'lon': follow_pos[1]}, MIN_MOVE_DEG):
-        return False
+        return []
     return [('aller_a', agent, follow_pos)]
 
 
 def aller_a_position_m(state, agent, pos):
+    # Same idempotency guard as aller_a_agent_m/suivre_m/maintenir_contact_m —
+    # without it, this was the one movement method that re-issued the SAME
+    # waypoint on every replan cycle, since the calling agent always watches
+    # its OWN position (main.py) and re-plans on every tiny move while it's
+    # actually en route. Resending an identical waypoint list repeatedly
+    # resets the LOTUSim waypoint-follower's progress each time instead of
+    # letting it complete the leg — visible as the vessel "spinning in place"
+    # rather than ever reaching the target (e.g. rentrer_a_la_base never
+    # actually arriving at base).
+    last = state.agents[agent].get('last_waypoint')
+    if last and in_zone({'lat': last[0], 'lon': last[1]}, {'lat': pos[0], 'lon': pos[1]}, MIN_MOVE_DEG):
+        return []
     return [('aller_a', agent, pos)]
+
+
+# Angle advanced per replan cycle — with the event-driven replanning loop
+# (main.py) re-checking roughly every REPLAN_SAFETY_TIMEOUT (~5s) or whenever
+# the target actually moves, this gives a slow, visible orbit rather than a
+# barely-perceptible creep or a dizzying spin.
+ORBIT_ANGULAR_STEP = math.radians(35)
+# Fallback orbit radius if the agent has no "encercler_threshold" of its own
+# (matches surveiller_zone's contact-detection scale).
+DEFAULT_ORBIT_RADIUS_DEG = 0.01
+
+
+# Orbit strictly inside the "close enough to orbit" trigger radius, not AT it —
+# a radius exactly equal to the precondition's threshold sits right on the
+# float-rounding boundary of "distance_below", so cos/sin rounding would
+# occasionally push the computed distance a hair over it, flip the precondition
+# to "too far", and snap the agent straight to the target's exact position for
+# one cycle before it resumes orbiting. 90% leaves enough margin to never flirt
+# with that boundary.
+ORBIT_RADIUS_MARGIN = 0.9
+
+
+def orbiter_m(state, agent, target):
+    """
+    Circles `target` at roughly a fixed radius — unlike suivre_m/aller_a_agent_m
+    (a single waypoint, re-issued only if the target moves), this ALWAYS
+    advances to a new point on the circle each time it's replanned, tracked via
+    a persistent "orbit_angle" on the agent's own state. The radius is a margin
+    below this agent's own "encercler_threshold" (conditions.eviter_threshold
+    twin, used by the "encercler" task's precondition — see
+    knowledge_base.json), so it orbits comfortably inside the distance that
+    triggered orbiting rather than teetering right on its edge.
+    """
+    pos = state.agents.get(target, {}).get('pos')
+    if pos is None:
+        return False
+    ag = state.agents[agent]
+    try:
+        trigger_radius = float(ag.get('encercler_threshold') or DEFAULT_ORBIT_RADIUS_DEG)
+    except (TypeError, ValueError):
+        trigger_radius = DEFAULT_ORBIT_RADIUS_DEG
+    radius = trigger_radius * ORBIT_RADIUS_MARGIN
+    angle = (ag.get('orbit_angle') or 0.0) + ORBIT_ANGULAR_STEP
+    ag['orbit_angle'] = angle
+    next_pos = (pos['lat'] + radius * math.cos(angle), pos['lon'] + radius * math.sin(angle))
+    return [('aller_a', agent, next_pos)]
 
 
 # ── Déclarations GTpyhop ──────────────────────────────────────────────────────
@@ -324,5 +405,6 @@ gtpyhop.declare_task_methods('aller_a_agent',       aller_a_agent_m)
 gtpyhop.declare_task_methods('suivre',              suivre_m)
 gtpyhop.declare_task_methods('maintenir_contact',   maintenir_contact_m)
 gtpyhop.declare_task_methods('aller_a_position',    aller_a_position_m)
+gtpyhop.declare_task_methods('orbiter',             orbiter_m)
 
 load_kb()

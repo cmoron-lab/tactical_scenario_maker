@@ -5,7 +5,10 @@
     "__cible__": "__any__",
     "__drone__": "__drone__",
     "__any__": "__any__",
-    "__zone__": "__zone__"
+    "__zone__": "__zone__",
+    "agent1": "agent1",
+    "__patrol__": "agent1",
+    "agent2": "agent2"
   },
   "tasks": {
     "veiller": {
@@ -200,12 +203,13 @@
       "label": "\u00c9viter un autre agent (approche, puis demi-tour une fois trop proche)",
       "methods": [
         {
-          "name": "Trop proche (<1km) \u2014 demi-tour vers la base",
+          "name": "Trop proche \u2014 demi-tour vers la base",
           "preconditions": [
             {
               "type": "distance_below",
               "target": "__cible__",
-              "threshold": 0.01
+              "threshold": 0.01,
+              "threshold_var": "eviter_threshold"
             }
           ],
           "subtasks": [
@@ -213,6 +217,44 @@
               "task": "rentrer_a_la_base",
               "args": [
                 "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Hors de port\u00e9e \u2014 approche",
+          "preconditions": [],
+          "subtasks": [
+            {
+              "task": "aller_a_agent",
+              "args": [
+                "__self__",
+                "__cible__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "encercler": {
+      "label": "Encercler un autre agent (approche, puis tourne en cercle une fois assez proche)",
+      "methods": [
+        {
+          "name": "Assez proche \u2014 tourne en cercle",
+          "preconditions": [
+            {
+              "type": "distance_below",
+              "target": "__cible__",
+              "threshold": 0.01,
+              "threshold_var": "encercler_threshold"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "orbiter",
+              "args": [
+                "__self__",
+                "__cible__"
               ]
             }
           ]
@@ -257,6 +299,13 @@
     },
     "maintenir_contact": {
       "label": "Maintenir contact",
+      "args": [
+        "agent",
+        "agent"
+      ]
+    },
+    "orbiter": {
+      "label": "Tourner en cercle autour d'un agent",
       "args": [
         "agent",
         "agent"
