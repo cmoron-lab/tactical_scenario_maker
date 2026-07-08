@@ -8,7 +8,9 @@
     "__zone__": "__zone__",
     "agent1": "agent1",
     "__patrol__": "agent1",
-    "agent2": "agent2"
+    "agent2": "agent2",
+    "agent_1": "agent_1",
+    "agent_2": "agent_2"
   },
   "tasks": {
     "veiller": {
@@ -268,6 +270,47 @@
               "args": [
                 "__self__",
                 "__cible__"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "reagir_commande": {
+      "label": "R\u00e9agit selon \"commande\" (cercle\u2192encercler, rine\u2192eviter)",
+      "methods": [
+        {
+          "name": "reagir_commande_cercle",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "commande",
+              "value": "cercle"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "encercler",
+              "args": [
+                "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "reagir_commande_rine",
+          "preconditions": [
+            {
+              "type": "state_equals",
+              "variable": "commande",
+              "value": "rine"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "eviter",
+              "args": [
+                "__self__"
               ]
             }
           ]

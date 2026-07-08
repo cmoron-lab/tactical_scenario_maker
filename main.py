@@ -15,6 +15,7 @@ from lotusim_msgs.msg import VesselPositionArray
 
 _ros_node = None
 _pose_log = None
+_pose_log_file = None
 _waypoint_log = None
 _waypoint_log_lock = threading.Lock()
 
@@ -31,11 +32,12 @@ def _ts():
     return datetime.now(timezone.utc).isoformat(timespec='milliseconds')
 
 def init_logs():
-    global _pose_log, _waypoint_log
+    global _pose_log, _pose_log_file, _waypoint_log
     os.makedirs('logs', exist_ok=True)
     pf = open('logs/poses.csv', 'w', newline='')
     wf = open('logs/waypoints.csv', 'w', newline='')
     _pose_log = csv.writer(pf)
+    _pose_log_file = pf
     _waypoint_log = (csv.writer(wf), wf)
     _pose_log.writerow(['timestamp', 'agent', 'lat', 'lon'])
     _waypoint_log[0].writerow(['timestamp', 'agent', 'lat', 'lon'])
@@ -70,6 +72,11 @@ class PoseTracker:
                 self._data[v.vessel_name] = new
                 if _pose_log:
                     _pose_log.writerow([ts, v.vessel_name, new['lat'], new['lon']])
+                    # Flushed on every row, like the waypoint log (bdd/primitives_actions.py::c_aller_a) —
+                    # left unflushed, a large chunk can sit in the OS write buffer and get lost/corrupted
+                    # (observed as a huge run of NUL bytes reading it back) if the process is killed
+                    # abruptly rather than shut down cleanly.
+                    _pose_log_file.flush()
                 if changed:
                     for ev in self._watchers.get(v.vessel_name, []):
                         ev.set()
@@ -232,6 +239,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        if _pose_log_file:
+            _pose_log_file.close()
         if _waypoint_log:
             _waypoint_log[1].close()
         executor.shutdown()

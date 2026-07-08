@@ -240,7 +240,10 @@ def _mentions_intruder(description: str) -> bool:
 
 
 _PASSIVE_AGENT_PATTERN = re.compile(
-    r"ne\s+fai(?:s|t)\s+rien|ne\s+fait\s+aucune|reste\s+(?:immobile|en\s+place|passif|sur\s+place)|"
+    # "ne fait/fais rien" (conjugated) AND "ne rien faire" (infinitive) — both
+    # common orderings in French for "does/do nothing".
+    r"ne\s+fai(?:s|t)\s+rien|ne\s+rien\s+fai(?:re|s|t)|ne\s+fait\s+aucune|"
+    r"reste\s+(?:immobile|en\s+place|passif|sur\s+place)|"
     r"n['\s]agit\s+pas|ne\s+bouge\s+pas|(?<!\w)inactif|(?<!\w)passif|standby|"
     r"does\s+nothing|stays?\s+(?:put|still|idle)",
     re.IGNORECASE,
@@ -250,6 +253,29 @@ _PASSIVE_AGENT_PATTERN = re.compile(
 def _mentions_passive_agent(description: str) -> bool:
     """True if the text explicitly says at least one agent does nothing / stays put."""
     return bool(_PASSIVE_AGENT_PATTERN.search(description))
+
+
+# Movement shapes/patterns with NO matching leaf task (bdd/tasks_methods.py) —
+# "suggested_methods" can only SEQUENCE existing leaf tasks (aller_a_agent,
+# aller_a_position, suivre, maintenir_contact, creation_agent, orbiter); it
+# cannot invent a genuinely new motion primitive requiring live geometry (a
+# square/spiral/zigzag path relative to a moving target), since JSON args are
+# static tokens, not expressions — that needs real Python code (see
+# orbiter_m). "cercle"/"circle"/"orbite" are deliberately NOT listed here —
+# "encercler" already covers those.
+_UNSUPPORTED_SHAPE_KEYWORDS = [
+    'carre', 'carré', 'square', 'spirale', 'spiral', 'zigzag', 'triangle',
+    'rectangle', 'etoile', 'étoile', 'star', 'figure en huit', 'figure-eight',
+]
+
+
+def _mentions_unsupported_shape(description: str) -> Optional[str]:
+    """Returns the first unsupported shape keyword found, or None."""
+    text = _strip_accents(description.lower())
+    for kw in _UNSUPPORTED_SHAPE_KEYWORDS:
+        if _strip_accents(kw) in text:
+            return kw
+    return None
 
 
 _INTRUDER_NOUN_PATTERN = (
@@ -303,6 +329,73 @@ def _expected_avoid_distance_deg(description: str) -> Optional[float]:
 
 def _strip_accents(text: str) -> str:
     return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+
+
+# "si <var> = <valeur> : <comportement>" / "if <var> = <value>: <behavior>" —
+# one bullet per branch. Captured globally (not scoped to a specific agent
+# name) since the LLM's own agent naming is what decides who's who; the
+# caller matches branches to whichever acting agent isn't the passive one.
+_BRANCH_LINE_PATTERN = re.compile(
+    r'(?:^|[-*]\s*)(?:si|if)\s+(\w+)\s*=\s*(\S+?)\s*:\s*([^\n]+)',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Keyword -> built-in mission, used ONLY to map each branch's freeform
+# behavior text to a mission that's known to actually work — matches
+# _MISSION_KEYWORDS in spirit but resolves to a specific mission name instead
+# of just "some keyword matched". First match wins; order matters (more
+# specific phrases before generic ones sharing a substring).
+_BRANCH_MISSION_KEYWORDS = [
+    ('encercler', ['cercle', 'cercl', 'encercl', 'orbit', 'tourne autour']),
+    ('eviter', ['demi-tour', 'demi tour', 'recule', 'eviter', 'evite', 'esquiv']),
+    ('rentrer_a_la_base', ['retour a la base', 'rentre a la base', 'rentrer a la base', 'rentre a sa base']),
+    ('suivre_agent', ['suit ', 'suivre', 'poursuit', 'pourchasse', 'chasse']),
+    ('reconnaissance', ['reconnaissance', 'recon']),
+    ('surveiller_zone', ['surveille la zone', 'surveiller la zone', 'surveille une zone']),
+    ('deploiement_drone', ['deploie le drone', 'deploiement du drone', 'deploie son drone']),
+    ('veiller', ['ne rien faire', 'rien faire', 'ne fait rien', 'reste immobile', 'reste sur place', 'veille']),
+]
+
+
+def _match_mission_for_branch_text(text: str) -> Optional[str]:
+    norm = _strip_accents(text.lower())
+    for mission, keywords in _BRANCH_MISSION_KEYWORDS:
+        if any(_strip_accents(kw) in norm for kw in keywords):
+            return mission
+    return None
+
+
+def _detect_conditional_mission_branches(
+    description: str,
+) -> Optional[Tuple[str, List[Tuple[str, str]]]]:
+    """
+    Deterministic detection of 2+ "si <var> = <valeur>: <comportement>"
+    branches that ALL map to a known, working mission — the LLM is unreliable
+    at spontaneously building this structure even when explicitly instructed
+    (rule 10bis), consistently collapsing it to a single mission instead. So
+    it's parsed and built here directly instead of trusted to the model, the
+    same reasoning as _expected_agent_count/_expected_avoid_distance_deg.
+
+    Returns (variable_name, [(value, mission_name), ...]), or None if fewer
+    than 2 branches were found, they reference different variables (not one
+    coherent branch set), or ANY branch's text doesn't map to a known
+    mission — a partially-understood branch set is worse to guess at than to
+    fall through to the normal LLM/refusal path (_mentions_unsupported_shape
+    already refuses cleanly when a branch names an unsupported shape).
+    """
+    matches = _BRANCH_LINE_PATTERN.findall(description)
+    if len(matches) < 2:
+        return None
+    variables = {m[0].strip().lower() for m in matches}
+    if len(variables) != 1:
+        return None
+    branches = []
+    for _, value, text in matches:
+        mission = _match_mission_for_branch_text(text)
+        if mission is None:
+            return None
+        branches.append((value.strip().lower(), mission))
+    return next(iter(variables)), branches
 
 
 def _has_actionable_signal(description: str) -> bool:
@@ -501,6 +594,19 @@ Rules (follow strictly):
      true if this agent's live distance to the resolved target is below/above threshold (degrees).
      "target" accepts "__cible__"/"__base_location__"/"__zone__"/"__any__" or a literal agent
      name — no separate setup needed, it's evaluated fresh every time from real positions.
+   10bis. If the description says the SAME agent's behavior should depend on a variable's value
+   ("si commande = cercle: ...; si commande = carré: ..."), that IS supported — it's exactly how
+   the built-in "reconnaissance" mission already works (one method with
+   {{"type": "state_equals", "variable": "drone_available", "value": "true"}}, a second method
+   with no precondition as the fallback). Do it the same way: output SEVERAL "suggested_methods"
+   entries that all share the SAME "task" name, one per branch, each with its own
+   "state_equals"/"distance_..." precondition — they become separate METHODS of that one task,
+   tried in the order you list them (put the unconditional fallback, if any, LAST). Set this
+   agent's own "conditions" to whichever branch value applies for THIS scenario (e.g.
+   "conditions": {{"commande": "cercle"}}) — preconditions read from the agent's own conditions,
+   never from some outside "current command" input. Do NOT collapse multiple branches into a
+   single method or silently drop the branches you can't implement (see rule 11) — build every
+   branch you can as its own method, and if EVERY branch is unbuildable, use rule 11 instead.
 11. If you genuinely cannot model this scenario — even with a new task above, e.g. it needs a
    capability with no matching leaf task (weapons, communications, sensors beyond distance/position,
    etc.) — do NOT invent something wrong or approximate. Output ONLY:
@@ -510,11 +616,18 @@ Rules (follow strictly):
 
 
 def _parse_scenario_from_description(
-    description: str, kb: Dict[str, Any]
+    description: str, kb: Dict[str, Any], ignore_suggestion_validation: bool = False
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
     Parse natural language description into structured scenario, self-correcting
     once if the acting-agent count doesn't match what the text clearly states.
+
+    ignore_suggestion_validation: True when the caller already deterministically
+    detected a "si <var> = X: ...; si <var> = Y: ..." branch set
+    (_detect_conditional_mission_branches) that it's going to build itself,
+    overriding whatever mission this response assigns — so whatever the LLM
+    ALSO proposes in "suggested_methods" for that same behavior is irrelevant
+    and shouldn't block generation just because it's malformed.
 
     Returns: (parsed_json, warnings)
     parsed_json may contain {"needs_clarification": True, "clarification_questions": [...]}
@@ -577,7 +690,9 @@ def _parse_scenario_from_description(
             for s in (parsed.get('suggested_methods') or [])
             if isinstance(s, dict) and s.get('task', '').strip()
         }
-        bad_suggestion = any(probs for probs in suggestion_problems.values())
+        bad_suggestion = not ignore_suggestion_validation and any(
+            probs for probs in suggestion_problems.values()
+        )
 
         if (count_wrong or intruder_count_wrong or drone_without_cible or bad_mission
                 or missing_passive_agent or bad_suggestion) and attempt < MAX_RETRIES:
@@ -821,12 +936,6 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
         if _validate_suggested_method(suggestion, kb, sibling_task_names):
             continue
 
-        method = {
-            "name": f"{task_name}_suggested_m",
-            "preconditions": suggestion.get("preconditions", []),
-            "subtasks": suggestion.get("subtasks", [])
-        }
-
         tasks = kb.setdefault("tasks", {})
         is_new_task = task_name not in tasks
 
@@ -841,13 +950,47 @@ def _enrich_kb_with_methods(kb: Dict[str, Any], parsed: Dict[str, Any]) -> Dict[
         if is_new_task:
             updates["added_tasks"].append(task_name)
 
-        method_names = [m.get("name") for m in task_def.get("methods", [])]
-        if method["name"] not in method_names:
-            task_def.setdefault("methods", []).append(method)
-            updates["added_methods"].append({
-                "task": task_name,
-                "method": method["name"]
-            })
+        # Several suggestions can share the same "task" name — each becomes a
+        # separate METHOD of that one composite task, exactly like the
+        # built-in "reconnaissance" has 2 methods (state_equals
+        # drone_available=true first, unconditional fallback last): that's
+        # how a mission branches on a state variable (e.g. "si commande = X:
+        # ...; si commande = Y: ..."). Method names must be unique per task —
+        # a fixed "<task>_suggested_m" name would collide the moment a SECOND
+        # branch for the same task came in, silently dropping it.
+        existing_names = {m.get("name") for m in task_def.get("methods", [])}
+        idx = 1
+        method_name = f"{task_name}_suggested_m{idx}"
+        while method_name in existing_names:
+            idx += 1
+            method_name = f"{task_name}_suggested_m{idx}"
+
+        method = {
+            "name": method_name,
+            "preconditions": suggestion.get("preconditions", []),
+            "subtasks": suggestion.get("subtasks", [])
+        }
+        methods_list = task_def.setdefault("methods", [])
+        if method["preconditions"]:
+            # GTPyhop tries methods IN ORDER and stops at the first one whose
+            # precondition succeeds. A conditional method appended AFTER an
+            # existing unconditional one (e.g. "encercler"'s own built-in
+            # fallback "Hors de portée — approche", preconditions: []) would
+            # never actually be reached — insert it before the first
+            # unconditional method instead, so it's tried first like it should
+            # be. An unconditional method being ADDED still goes at the very
+            # end (it's the new fallback), same as before.
+            insert_at = next(
+                (i for i, m in enumerate(methods_list) if not m.get("preconditions")),
+                len(methods_list),
+            )
+            methods_list.insert(insert_at, method)
+        else:
+            methods_list.append(method)
+        updates["added_methods"].append({
+            "task": task_name,
+            "method": method_name
+        })
 
         if not task_def.get("label"):
             task_def["label"] = suggestion.get("description", task_name)
@@ -883,12 +1026,36 @@ def generate_scenario_from_description(
             "Que doivent-ils faire précisément (veille, suivi, reconnaissance, surveillance de zone...) ?",
         ], None
 
+    # Known-impossible requests — refuse before even calling the LLM (faster,
+    # and avoids the LLM silently picking whichever shape/behavior it CAN do
+    # and dropping the rest). NOTE: branching a mission on a state variable
+    # (e.g. "si commande = X") is NOT refused here — the KB precondition
+    # system already supports exactly that (see "reconnaissance": method 1
+    # fires on state_equals drone_available=true, method 2 is the fallback;
+    # rule 10bis in the prompt below tells the LLM to build new tasks the
+    # same way). Only a genuinely missing movement PRIMITIVE is a hard stop.
+    unsupported_shape = _mentions_unsupported_shape(description)
+    if unsupported_shape:
+        return None, warnings, {}, None, (
+            f"Je ne peux pas modéliser ce scénario : aucune primitive de mouvement ne sait "
+            f"tracer la forme demandée (\"{unsupported_shape}\") — seul un déplacement direct "
+            f"vers un point/agent, ou un cercle (\"encercler\"), sont disponibles."
+        )
+
     try:
         expected_count = _expected_agent_count(description)
         intruder_count = _expected_intruder_count(description)
         avoid_distance_deg = _expected_avoid_distance_deg(description)
+        # Computed early: when set, the target agent's mission gets overridden
+        # with a deterministically-built branching task further down, so
+        # whatever the LLM ALSO proposes in "suggested_methods" for that same
+        # behavior is irrelevant — don't let it block generation just because
+        # it's malformed (see _parse_scenario_from_description's docstring).
+        branch_detection = _detect_conditional_mission_branches(description)
 
-        parsed, retry_warnings = _parse_scenario_from_description(description, kb)
+        parsed, retry_warnings = _parse_scenario_from_description(
+            description, kb, ignore_suggestion_validation=branch_detection is not None
+        )
         warnings.extend(retry_warnings)
 
         # Task names this response also defines via "suggested_methods" — a valid
@@ -1039,8 +1206,68 @@ def generate_scenario_from_description(
                 if len(others) == 1:
                     a['conditions'].setdefault('cible', others[0])
 
-        # Enrich KB with new methods/tasks
-        kb_updates = _enrich_kb_with_methods(kb, parsed)
+        # "si <var> = X: ...; si <var> = Y: ..." — the LLM reliably collapses this
+        # to a single mission even when explicitly told how to build the
+        # branching structure (rule 10bis), so it's constructed here directly
+        # (branch_detection computed earlier, before the LLM call).  Applied to
+        # whichever acting agent ISN'T the passive one — matches every example
+        # seen so far (one passive agent, one branching agent); skipped (not
+        # guessed at) if that pairing isn't unambiguous.
+        branch_task_name = None
+        if branch_detection is not None:
+            variable, branches = branch_detection
+            active_agents = [
+                n for n, a in agents.items()
+                if (a.get('resolved_task') or [None])[0] != 'veiller' and n not in zone_names
+            ]
+            if len(active_agents) == 1:
+                target_name = active_agents[0]
+                target = agents[target_name]
+                branch_task_name = f"reagir_{variable}"
+                methods = [
+                    {
+                        "name": f"{branch_task_name}_{value}",
+                        "preconditions": [
+                            {"type": "state_equals", "variable": variable, "value": value}
+                        ],
+                        "subtasks": [{"task": mission, "args": ["__self__"]}],
+                    }
+                    for value, mission in branches
+                ]
+                kb.setdefault("tasks", {})[branch_task_name] = {
+                    "label": f"Réagit selon \"{variable}\" ("
+                             + ", ".join(f"{v}→{m}" for v, m in branches) + ")",
+                    "methods": methods,
+                }
+                target["mission"] = f"{branch_task_name} __self__"
+                target["resolved_task"] = [branch_task_name]
+                # Default to the first branch — "conditions.<var>" is a plain
+                # per-scenario value (like eviter_threshold), not something that
+                # changes live during a run; edit it in the scenario/KB editor to
+                # switch which branch this agent actually takes.
+                target["conditions"].setdefault(variable, branches[0][0])
+                others = [n for n in agents if n != target_name and n not in zone_names]
+                branch_missions = {m for _, m in branches}
+                if len(others) == 1 and branch_missions & {
+                    'eviter', 'encercler', 'suivre_agent', 'reconnaissance'
+                }:
+                    target["conditions"].setdefault('cible', others[0])
+                if avoid_distance_deg is not None:
+                    if 'eviter' in branch_missions:
+                        target["conditions"].setdefault('eviter_threshold', avoid_distance_deg)
+                    if 'encercler' in branch_missions:
+                        target["conditions"].setdefault('encercler_threshold', avoid_distance_deg)
+
+        # Enrich KB with new methods/tasks — skipped when the deterministic branch
+        # builder above already handled this description: the LLM tends to ALSO
+        # propose its own (redundant, sometimes clumsier) suggested_methods for
+        # the very same "si commande = X" behavior, which would just clutter
+        # built-in tasks like "encercler" with extra state_equals methods no
+        # other scenario needs.
+        if branch_task_name:
+            kb_updates = {"added_tasks": [branch_task_name], "added_methods": []}
+        else:
+            kb_updates = _enrich_kb_with_methods(kb, parsed)
         _save_kb(kb)
 
         # Every acting agent already carries its own resolved mission (set above) —

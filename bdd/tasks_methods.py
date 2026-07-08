@@ -235,6 +235,16 @@ def load_kb():
     _resolve_tokens = dict(kb.get('resolve_tokens', {}))
 
     for task_name, task_def in kb['tasks'].items():
+        # gtpyhop.declare_task_methods() ACCUMULATES across calls by design (its
+        # own docstring: "can be called several times to declare MORE methods
+        # for the same task") — meant for spreading declarations across files,
+        # not for reloading. But load_kb() gets called again on every KB save
+        # (app.py's /api/kb handler, and every AI-generated scenario), so
+        # without clearing the previous registration first, each reload piled
+        # a duplicate copy of every method onto the ones already registered —
+        # silently multiplying preconditions/subtasks and shifting method
+        # order with every single edit made through the KB tab.
+        gtpyhop.current_domain._task_method_dict.pop(task_name, None)
         methods = []
         for i, m in enumerate(task_def['methods']):
             fn = _make_method(m['preconditions'], m['subtasks'])
