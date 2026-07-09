@@ -1,0 +1,2673 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Scenario Maker — Naval Group</title>
+<style>
+:root {
+  --navy:       #002B60;
+  --navy-mid:   #003E8A;
+  --navy-light: #EEF3FA;
+  --bg:         #F4F6F9;
+  --surface:    #FFFFFF;
+  --border:     #D2DBE7;
+  --border-hi:  #9BB3CC;
+  --text:       #131E2D;
+  --text2:      #5A718A;
+  --text3:      #9DB2C8;
+  --blue:       #0057B8;
+  --blue-hi:    #1A70D0;
+  --red:        #C8002A;
+  --green:      #1A7A48;
+  --shadow:     0 1px 4px rgba(0,43,96,0.10);
+  --shadow-md:  0 4px 16px rgba(0,43,96,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+header {
+  background: var(--navy);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px; height: 32px;
+  background: #fff;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-mark span { color: var(--navy); font-size: 11px; font-weight: 800; letter-spacing: -0.5px; }
+
+.logo-text { font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+
+.header-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.2); }
+
+.header-app { font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.7); letter-spacing: 0.2px; }
+
+/* ── Tab navigation ──────────────────────────────────────────────────── */
+.tabs-nav {
+  background: var(--navy);
+  display: flex;
+  padding: 0 28px;
+  border-bottom: 2px solid rgba(0,0,0,0.25);
+  position: sticky;
+  top: 56px;
+  z-index: 99;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.14s;
+  font-family: inherit;
+}
+
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #fff; }
+
+/* ── App layout (scenarios tab) ──────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 56px - 41px);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 0 8px;
+  margin-bottom: 10px;
+}
+
+.sc-list { flex: 1; overflow-y: auto; }
+
+.sc-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  cursor: default;
+  transition: background 0.12s, border-color 0.12s;
+}
+.sc-item:hover { background: var(--navy-light); }
+.sc-item.active { background: var(--navy-light); border-color: var(--border-hi); }
+
+.sc-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-item.active .sc-name { color: var(--blue); font-weight: 600; }
+
+.sc-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+.sc-btn:hover { background: #F0F0F0; color: var(--text2); }
+.sc-btn.del:hover { background: #FDECEA; color: var(--red); }
+
+.sidebar-footer {
+  padding-top: 14px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sc-empty { color: var(--text3); font-size: 13px; padding: 8px; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: all 0.14s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.btn-full { width: 100%; justify-content: center; }
+
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--border-hi);
+  color: var(--text2);
+}
+.btn-outline:hover { border-color: var(--blue); color: var(--blue); }
+
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-hi); }
+
+.btn-navy { background: var(--navy); color: #fff; }
+.btn-navy:hover { background: var(--navy-mid); }
+
+.btn-launch {
+  background: #1A6E2E;
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  padding: 10px 24px;
+}
+.btn-launch:hover { background: #218838; }
+.btn-launch:disabled { background: #888; cursor: not-allowed; opacity: 0.7; }
+
+.launch-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+.launch-status.running { background: #EBF7EE; border: 1px solid #A8D8B0; color: var(--green); }
+.launch-status.error   { background: #FDECEA; border: 1px solid #F5C6C6; color: var(--red); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text2);
+}
+.btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border-hi); }
+
+/* ── Editor (scenario) ───────────────────────────────────────────────── */
+.editor { padding: 28px 32px; overflow-y: auto; }
+
+.editor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  color: var(--text3);
+  text-align: center;
+  gap: 12px;
+}
+.editor-empty .icon { font-size: 36px; opacity: 0.4; }
+.editor-empty p { font-size: 15px; }
+
+.scenario-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-name-input {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 6px;
+  width: 260px;
+  transition: border-color 0.12s;
+}
+.sc-name-input:focus { outline: none; border-color: var(--blue); }
+.sc-name-input:read-only { border-color: transparent; background: transparent; padding-left: 0; color: var(--navy); }
+
+.sc-file-pill {
+  padding: 4px 12px;
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  letter-spacing: 0.2px;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.agent-head {
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  background: var(--navy);
+  gap: 12px;
+}
+
+.agent-name-display { flex: 1; font-size: 15px; font-weight: 600; color: #fff; letter-spacing: 0.2px; }
+
+.agent-type-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.agent-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.agent-remove:hover { color: #fff; background: rgba(200,0,42,0.4); }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+  padding: 18px 18px 14px;
+}
+.fw { grid-column: 1 / -1; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  letter-spacing: 0.2px;
+}
+
+.field input, .field select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  width: 100%;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.field input:focus, .field select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
+}
+.field select option { background: #fff; }
+
+.mission-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.task-select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  flex: 1 1 180px;
+  min-width: 160px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.task-select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,87,184,0.10); }
+.task-select option { background: #fff; }
+
+.mission-extra {
+  flex: 2 1 220px;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mission-extra input, .mission-extra select {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 5px;
+  flex: 1 1 120px;
+  min-width: 0;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.mission-extra input:focus, .mission-extra select:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,87,184,0.10);
+}
+.mission-extra select option { background: #fff; }
+
+.mission-deps {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+}
+.mission-dep {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+.mission-dep.ok   { color: var(--green, #1a7f37); background: rgba(26,127,55,0.08); }
+.mission-dep.warn { color: var(--red, #c0392b); background: rgba(192,57,43,0.09); }
+
+.mission-dep-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.mission-dep-row label { color: var(--text2); white-space: nowrap; }
+.dep-agent-sel {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.dep-agent-sel:focus { outline: none; border-color: var(--blue); }
+
+.action-bar {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.plan-section {
+  margin-top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.plan-head {
+  padding: 12px 20px;
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plan-head-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); letter-spacing: 0.3px; }
+.plan-head-sub   { font-size: 11px; color: rgba(255,255,255,0.45); }
+
+.plan-body { padding: 6px 0; }
+
+.plan-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.plan-row:last-child { border-bottom: none; }
+
+.plan-agent { font-size: 13px; font-weight: 700; color: var(--navy); padding-top: 2px; }
+
+.plan-val {
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  color: var(--green);
+  background: #F4FAF6;
+  border: 1px solid #C8E6D4;
+  border-radius: 4px;
+  padding: 6px 10px;
+  word-break: break-all;
+  line-height: 1.6;
+}
+.plan-val.empty   { color: var(--text2); background: var(--bg); border-color: var(--border); font-style: italic; }
+.plan-val.waiting { color: #7A5A00; background: #FFFBEE; border-color: #F0D980; font-style: italic; }
+
+/* ── KB Editor ───────────────────────────────────────────────────────── */
+#tab-kb {
+  padding: 28px 32px;
+  overflow-y: auto;
+  max-height: calc(100vh - 56px - 41px);
+}
+
+.kb-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.kb-page-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 28px;
+}
+
+.kb-section { margin-bottom: 32px; }
+
+.kb-section-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.kb-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+
+.locked-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: var(--bg);
+  color: var(--text3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.kb-locked-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.kb-locked-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  opacity: 0.65;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kb-locked-item code { font-family: 'Courier New', monospace; font-size: 12px; color: var(--navy); font-weight: 700; }
+.kb-locked-item span { font-size: 12px; color: var(--text2); }
+
+/* Task accordion */
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.task-head {
+  display: flex;
+  align-items: center;
+  padding: 11px 16px;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+.task-head:hover { background: var(--navy-light); }
+.task-head.open  { background: var(--navy); }
+
+.task-arrow {
+  font-size: 11px;
+  color: var(--text3);
+  transition: transform 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.task-head.open .task-arrow { color: rgba(255,255,255,0.6); transform: rotate(90deg); }
+
+.task-key {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--navy-light);
+  color: var(--navy);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.task-head.open .task-key { background: rgba(255,255,255,0.15); color: #fff; }
+
+.task-label-inp {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: border-color 0.12s, background 0.12s;
+  cursor: text;
+}
+.task-head.open .task-label-inp { color: rgba(255,255,255,0.9); }
+.task-label-inp:focus { outline: none; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); }
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.task-head:not(.open) .task-del { color: var(--text3); }
+.task-head:not(.open) .task-del:hover { background: #FDECEA; color: var(--red); }
+.task-head.open .task-del { color: rgba(255,255,255,0.4); }
+.task-head.open .task-del:hover { background: rgba(200,0,42,0.4); color: #fff; }
+
+.task-body {
+  display: none;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.task-body.open { display: block; }
+
+/* Method card */
+.method-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.method-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--navy-light);
+  border-bottom: 1px solid var(--border);
+}
+
+.method-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--blue);
+  padding: 1px 6px;
+  border: 1px solid var(--border-hi);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.method-name-inp {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  min-width: 0;
+}
+.method-name-inp:focus { outline: none; }
+.method-name-inp::placeholder { color: var(--text3); font-weight: 400; }
+
+.move-btn {
+  background: none; border: none; cursor: pointer;
+  width: 24px; height: 24px;
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--text2); flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.move-btn:hover { background: var(--border); color: var(--text); }
+
+.del-btn {
+  background: none; border: none; cursor: pointer;
+  width: 24px; height: 24px;
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--text3); flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.del-btn:hover { background: #FDECEA; color: var(--red); }
+
+.method-body {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 800px) { .method-body { grid-template-columns: 1fr; } }
+
+.method-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+/* Precondition row */
+.precond-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.prec-type-sel {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-type-sel:focus { outline: none; border-color: var(--blue); }
+
+.prec-val-inp {
+  width: 110px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-val-inp:focus { outline: none; border-color: var(--blue); }
+
+.prec-thresholdvar-inp {
+  width: 140px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-thresholdvar-inp:focus { outline: none; border-color: var(--blue); }
+
+.prec-var-inp {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.prec-var-inp:focus { outline: none; border-color: var(--blue); }
+
+/* Subtask row */
+.subtask-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.subtask-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.subtask-task-sel {
+  flex: 1;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.subtask-task-sel:focus { outline: none; border-color: var(--blue); }
+
+.subtask-args-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.args-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-right: 2px;
+}
+
+.arg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--navy-light);
+  border: 1px solid var(--border-hi);
+  border-radius: 4px;
+  padding: 2px 4px 2px 6px;
+}
+
+.arg-custom-inp {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 5px;
+  width: 90px;
+  font-family: inherit;
+}
+.arg-custom-inp:focus { outline: none; border-color: var(--blue); }
+
+
+.agent-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.agent-picker-mode, .agent-picker-specific {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 5px;
+  font-family: inherit;
+  color: var(--text);
+  max-width: 160px;
+}
+.agent-picker-custom {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 5px;
+  width: 90px;
+  font-family: inherit;
+}
+.prec-field1-wrap { display: inline-flex; flex: 1; min-width: 0; }
+
+/* Mini button */
+.mini-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  color: var(--text2);
+  padding: 4px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: border-color 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+.mini-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── Conditions initiales (scenario editor) ─────────────────────────── */
+.cond-section {
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.cond-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text2);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.cond-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cond-row:last-child { margin-bottom: 0; }
+
+.cond-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.cond-sel {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+  width: 100px;
+  flex-shrink: 0;
+}
+.cond-sel:focus { outline: none; border-color: var(--blue); }
+
+.cond-inp {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+  width: 140px;
+  flex-shrink: 0;
+}
+.cond-inp:focus { outline: none; border-color: var(--blue); }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 999;
+  max-width: 320px;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"><span>NG</span></div>
+    <span class="logo-text">Naval Group</span>
+  </div>
+  <div class="header-divider"></div>
+  <span class="header-app">Tactical Scenario Maker</span>
+</header>
+
+<nav class="tabs-nav">
+  <button class="tab-btn active" data-tab="scenarios" onclick="switchTab('scenarios')">Scénarios</button>
+  <button class="tab-btn"        data-tab="kb"        onclick="switchTab('kb')">Connaissances HTN</button>
+  <button class="tab-btn"        data-tab="ia"        onclick="switchTab('ia')">🤖 IA</button>
+</nav>
+
+<!-- ── Tab: Scénarios ─────────────────────────────────────────────────── -->
+<div id="tab-scenarios">
+  <div class="app">
+
+    <div class="sidebar">
+      <div class="sidebar-title">Scénarios</div>
+      <div class="sc-list" id="sc-list">
+        <div class="sc-empty">Chargement…</div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn btn-outline btn-full" onclick="newScenario()">+ Nouveau scénario</button>
+      </div>
+    </div>
+
+    <div class="editor" id="editor">
+      <div class="editor-empty">
+        <div class="icon">⚓</div>
+        <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Tab: Connaissances HTN ─────────────────────────────────────────── -->
+<div id="tab-kb" style="display:none">
+
+  <div class="kb-section" style="border-bottom:1px solid var(--border);padding:20px 32px 16px;background:var(--surface)">
+    <div class="kb-page-title">Base de connaissances HTN</div>
+    <div class="kb-page-sub">Définissez ici les tâches, les méthodes et leurs préconditions. Les actions primitives sont gérées par le code Python et ne peuvent pas être modifiées ici.</div>
+  </div>
+
+  <div style="padding:28px 32px;overflow-y:auto;max-height:calc(100vh - 56px - 41px - 88px)">
+
+    <!-- Tasks -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">Tâches HTN</div>
+        <button class="btn btn-outline" onclick="addTask()" style="font-size:12px;padding:6px 14px">+ Nouvelle tâche</button>
+      </div>
+      <div id="kb-tasks"></div>
+    </div>
+
+    <!-- Leaf tasks (locked) -->
+    <div class="kb-section">
+      <div class="kb-section-hd">
+        <div class="kb-section-title">
+          Tâches feuilles
+          <span class="locked-badge">Verrouillées — code Python</span>
+        </div>
+      </div>
+      <div id="kb-leaf" class="kb-locked-grid"></div>
+    </div>
+
+    <div class="action-bar" style="border-top:1px solid var(--border);padding-top:20px;margin-top:0">
+      <button class="btn btn-primary" onclick="saveKB()">Sauvegarder la base de connaissances</button>
+      <button class="btn btn-outline" onclick="reloadKBFromServer()">🔄 Rafraîchir depuis le serveur</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Tab: IA ────────────────────────────────────────────────────────── -->
+<div id="tab-ia" style="display:none">
+  <div style="padding:28px 32px;max-height:calc(100vh - 56px - 41px);overflow-y:auto">
+    <div style="max-width:800px;margin:0 auto">
+      <h2 style="font-size:24px;font-weight:600;margin-bottom:12px;color:var(--text)">🤖 Générateur de scénarios IA</h2>
+      <p style="color:var(--text2);margin-bottom:28px;line-height:1.6">
+        Décrivez votre scénario tactique en langage naturel. L'IA générera automatiquement les agents, les tâches, 
+        les méthodes HTN et les conditions. Les tâches manquantes seront ajoutées à la base de connaissances.
+      </p>
+
+      <details style="margin-bottom:24px;background:var(--navy-light);border:1px solid var(--border);border-radius:8px;padding:16px 20px" open>
+        <summary style="cursor:pointer;font-weight:600;color:var(--navy);font-size:14px">💡 Comment bien écrire votre description</summary>
+        <div style="margin-top:14px;font-size:13px;color:var(--text2);line-height:1.7">
+          <p style="margin-bottom:10px">
+            <strong style="color:var(--text)">Comportement conditionnel</strong> — un agent peut réagir différemment
+            selon une variable, avec une ligne par cas :<br>
+            <code style="display:block;background:#fff;border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:12px;white-space:pre-wrap">si commande = cercle : va vers agent 1 et encercle-le
+si commande = veille : ne rien faire</code>
+          </p>
+
+          <p style="margin-bottom:0">
+            <strong style="color:var(--text)">Comportement selon la distance</strong> — reconnu directement, ça
+            correspond à ce que "éviter"/"encercler" savent déjà faire (approche au loin, réaction une fois
+            proche) :<br>
+            <code style="display:block;background:#fff;border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:12px;white-space:pre-wrap">si distance(agent1) > 100 m : rejoindre l'agent 1
+si distance(agent1) ≤ 100 m : tourner autour de l'agent 1</code>
+          </p>
+        </div>
+      </details>
+
+      <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:24px;margin-bottom:24px">
+        <label style="display:block;margin-bottom:12px;font-weight:600;color:var(--text)">Description du scénario</label>
+        <textarea 
+          id="ia-description" 
+          placeholder="Ex: Deux drones patrouillent une zone. Quand un intrus est détecté à proximité, l'un se rapproche tandis que l'autre continue la surveillance. Ils retournent à la base après 1 heure."
+          style="width:100%;min-height:120px;padding:12px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:13px;resize:vertical;color:var(--text)"
+        ></textarea>
+        
+        <div style="margin-top:16px;display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="generateScenarioFromAI()">
+            ✨ Générer le scénario
+          </button>
+          <button class="btn btn-ghost" onclick="document.getElementById('ia-description').value = ''">
+            Effacer
+          </button>
+        </div>
+
+        <div id="ia-status" style="display:none;margin-top:16px;padding:12px;border-radius:4px;font-size:13px">
+          <div id="ia-status-msg"></div>
+        </div>
+
+        <!-- Clarification questions from the AI -->
+        <div id="ia-clarify" style="display:none;margin-top:16px;padding:16px;background:#FFF8E6;border:1px solid #FFE8A8;border-radius:4px">
+          <div style="font-weight:600;color:#D4A400;margin-bottom:8px">❓ L'IA a besoin de précisions</div>
+          <ul id="ia-clarify-questions" style="margin:0 0 12px 20px;color:var(--text2);font-size:13px"></ul>
+          <textarea id="ia-clarify-answer" placeholder="Répondez ici en quelques mots..."
+            style="width:100%;min-height:70px;padding:10px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:13px;resize:vertical;color:var(--text)"></textarea>
+          <div style="margin-top:10px">
+            <button class="btn btn-primary" onclick="submitClarificationAnswer()">Renvoyer avec ces précisions</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generated scenario preview -->
+      <div id="ia-result" style="display:none;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:24px">
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Scénario généré</h3>
+        
+        <!-- Agents -->
+        <div style="margin-bottom:24px">
+          <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px">Agents</h4>
+          <div id="ia-agents-list" style="background:var(--bg);border-radius:4px;padding:12px"></div>
+        </div>
+
+        <div style="margin-bottom:24px">
+          <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px">KB mises à jour</h4>
+          <div id="ia-kb-updates" style="background:var(--bg);border-radius:4px;padding:12px;max-height:180px;overflow-y:auto"></div>
+        </div>
+
+        <!-- Warnings & Issues -->
+        <div id="ia-warnings" style="display:none;margin-bottom:24px;background:#FFF8E6;border:1px solid #FFE8A8;border-radius:4px;padding:12px">
+          <div style="font-weight:600;color:#D4A400;margin-bottom:8px">⚠ Avertissements</div>
+          <ul id="ia-warnings-list" style="margin-left:20px;color:var(--text2);font-size:12px"></ul>
+        </div>
+
+        <!-- Actions -->
+        <div style="border-top:1px solid var(--border);padding-top:16px">
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Nom du scénario</label>
+            <input id="ia-scenario-name" type="text" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px"
+              placeholder="ex: encerclement_3_agents">
+          </div>
+          <div style="display:flex;gap:12px">
+            <button class="btn btn-primary" onclick="importGeneratedScenario()">
+              📥 Importer comme scénario
+            </button>
+            <button class="btn btn-outline" onclick="document.getElementById('ia-result').style.display = 'none'">
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px;padding:20px;background:var(--navy-light);border-radius:6px;font-size:12px;color:var(--text2);line-height:1.6">
+        <strong style="color:var(--navy)">ℹ Note technique :</strong><br>
+        Cette fonctionnalité nécessite Ollama pour fonctionner localement et gratuitement.
+        <a href="https://ollama.ai" target="_blank" style="color:var(--blue);text-decoration:none">Installer Ollama</a> (gratuit),
+        puis lancer: <code style="background:#fff;padding:2px 4px;border-radius:2px">ollama serve</code>,
+        et télécharger un modèle: <code style="background:#fff;padding:2px 4px;border-radius:2px">ollama pull mistral</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Modèles de vaisseau spawnables (src/LOTUSim/assets/models/) ──────────────
+// "landscape" et "seabed" sont des assets d'environnement, pas des agents — exclus.
+const VESSEL_MODELS = [
+  { id: 'wamv',           label: 'WAM-V (catamaran de surface)' },
+  { id: 'fremm',          label: 'FREMM (frégate de surface)' },
+  { id: 'pha',            label: 'PHA (porte-hélicoptères amphibie)' },
+  { id: 'bluerov2_heavy', label: 'BlueROV2 Heavy (ROV sous-marin)' },
+  { id: 'lrauv',          label: 'LRAUV (drone sous-marin autonome)' },
+  { id: 'x500',           label: 'x500 (drone quadricoptère)' },
+  { id: 'x500_base',      label: 'x500 Base' },
+  { id: 'commando',       label: 'Commando' },
+  { id: 'dtmb_hull',      label: 'DTMB Hull (coque de référence)' },
+  { id: 'mine',           label: 'Mine (objet statique)' },
+  { id: 'cube',           label: 'Cube (test générique)' },
+];
+
+// ── Task catalogue (scenario editor) ─────────────────────────────────────────
+let TASKS = {};
+
+// Derived from the task's actual fixed signature (getArgSpec, defined below —
+// composite tasks are always exactly ["agent"], leaf tasks read their real
+// arity/kind from kbData.leaf_tasks) instead of guessing from the task's name
+// or label — the previous name-matching heuristic mislabeled "aller_a_agent"
+// (whose 2nd arg is another AGENT) as a position field.
+function inferTaskExtra(task) {
+  const second = getArgSpec(task)[1];
+  if (second === 'position') return 'pos';
+  if (second === 'agent') return 'target';
+  return 'none';
+}
+
+function refreshTaskCatalog(kb = kbData) {
+  const catalog = {};
+  Object.entries(kb?.tasks || {}).forEach(([k, def]) => {
+    catalog[k] = { label: def?.label || k, extra: inferTaskExtra(k) };
+  });
+  Object.entries(kb?.leaf_tasks || {}).forEach(([k, v]) => {
+    const label = v?.label || v;
+    if (!catalog[k]) {
+      catalog[k] = { label: label || k, extra: inferTaskExtra(k) };
+    }
+  });
+  TASKS = catalog;
+  return TASKS;
+}
+
+function getTaskMeta(task) {
+  if (!task) return { label: '', extra: 'none' };
+  if (TASKS[task]) return TASKS[task];
+  const leaf = kbData?.leaf_tasks?.[task];
+  const fallback = kbData?.tasks?.[task]?.label || leaf?.label || leaf || task;
+  return { label: fallback || task, extra: inferTaskExtra(task) };
+}
+
+function getTaskRequiredArgs(taskName, visited = new Set()) {
+  if (!kbData || visited.has(taskName)) return [];
+  visited.add(taskName);
+
+  const task = kbData.tasks?.[taskName];
+  if (!task || !Array.isArray(task.methods)) return [];
+
+  const placeholders = new Set();
+  for (const method of task.methods) {
+    for (const st of method.subtasks || []) {
+      for (const arg of st.args || []) {
+        if (['__base_location__', '__base_position__'].includes(arg)) {
+          placeholders.add(arg);
+        }
+      }
+      getTaskRequiredArgs(st.task, visited).forEach(ph => placeholders.add(ph));
+    }
+  }
+  return [...placeholders];
+}
+
+let current = null;
+loadList();
+// KB is needed for condition fields in the scenario editor — load early
+fetch('/api/kb').then(r => r.json()).then(kb => { kbData = kb; refreshTaskCatalog(kb); });
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-scenarios').style.display = tab === 'scenarios' ? '' : 'none';
+  document.getElementById('tab-kb').style.display        = tab === 'kb'        ? '' : 'none';
+  document.getElementById('tab-ia').style.display        = tab === 'ia'        ? '' : 'none';
+  if (tab === 'kb' && !kbTabRendered) {
+    // Only auto-fetch the first time this tab is opened in the session — refetching on
+    // every switch would silently discard any unsaved edit (delete a task, switch away,
+    // come back: it'd reappear). Use the "🔄 Rafraîchir" button for a deliberate reload.
+    loadKB();
+  }
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function loadList() {
+  fetch('/api/scenarios').then(r => r.json()).then(list => {
+    const el = document.getElementById('sc-list');
+    if (!list.length) {
+      el.innerHTML = '<div class="sc-empty">Aucun scénario</div>';
+      return;
+    }
+    el.innerHTML = list.map(n => `
+      <div class="sc-item ${n === current ? 'active' : ''}">
+        <span class="sc-name" onclick="selectScenario('${n}')">${n}</span>
+        <button class="sc-btn del" title="Supprimer" onclick="deleteScenario('${n}')">✕</button>
+      </div>
+    `).join('');
+  });
+}
+
+function selectScenario(name) {
+  current = name;
+  fetch(`/api/scenario/${name}`).then(r => r.json()).then(agents => {
+    renderEditor(name, agents, false);
+    loadList();
+  });
+}
+
+function newScenario() {
+  current = null;
+  renderEditor('', {}, true);
+  loadList();
+}
+
+// ── Scenario editor ───────────────────────────────────────────────────────────
+function renderEditor(name, agents, isNew) {
+  document.getElementById('editor').innerHTML = `
+    <div class="scenario-bar">
+      <input class="sc-name-input" id="sc-name-inp"
+        value="${name}" placeholder="Nom du scénario"
+        ${isNew ? '' : 'readonly'}>
+      ${!isNew ? `<span class="sc-file-pill">${name}.py</span>` : ''}
+    </div>
+    <div id="agents-wrap"></div>
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="addAgent()">+ Ajouter un agent</button>
+      <button class="btn btn-primary" onclick="saveScenario()">Enregistrer</button>
+      <button class="btn btn-navy" onclick="computePlan()">Calculer plan HTN</button>
+      ${!isNew ? `<button class="btn btn-launch" onclick="launchScenario('${name}')">▶ Lancer sur Lotusim</button>` : ''}
+    </div>
+    <div id="launch-status"></div>
+    <div id="plan-section" class="plan-section" style="display:none">
+      <div class="plan-head">
+        <span class="plan-head-title">Plan HTN calculé</span>
+        <span class="plan-head-sub">État initial · intruder détecté</span>
+      </div>
+      <div class="plan-body" id="plan-body"></div>
+    </div>
+  `;
+  const wrap = document.getElementById('agents-wrap');
+  for (const [aname, a] of Object.entries(agents)) {
+    const card = buildCard(aname, a);
+    wrap.appendChild(card);
+    card._finalizeCard();
+  }
+  // Once per batch, after every card in this scenario is attached — not per-card,
+  // since a dependency dropdown (e.g. "Agent «drone»") needs to see ALL of them.
+  refreshAllMissionDeps();
+}
+
+function buildCard(name, a = {}) {
+  const div = document.createElement('div');
+  div.className = 'agent-card';
+  div.id = `ac-${name}`;
+
+  const parsed = parseMission(a.mission || '');
+  const initConds = a.conditions || {};
+
+  div.innerHTML = `
+    <div class="agent-head">
+      <span class="agent-type-chip">Agent</span>
+      <span class="agent-name-display">${name}</span>
+      <button class="agent-remove" onclick="removeCard('${name}')">Supprimer</button>
+    </div>
+    <div class="form-grid" data-agent="${name}">
+      <div class="field">
+        <label>Latitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~1.25–1.27)</span></label>
+        <input name="x" type="number" step="any" value="${a.x ?? ''}" placeholder="1.2605"
+          oninput="warnCoord(this, 1.0, 2.0)">
+      </div>
+      <div class="field">
+        <label>Longitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~103.7–103.8)</span></label>
+        <input name="y" type="number" step="any" value="${a.y ?? ''}" placeholder="103.7516"
+          oninput="warnCoord(this, 103.0, 104.0)">
+      </div>
+      <div class="field">
+        <label>Modèle</label>
+        <select name="model">
+          ${VESSEL_MODELS.map(m =>
+            `<option value="${m.id}" ${m.id === (a.model ?? 'wamv') ? 'selected' : ''}>${m.label}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Cap <span style="font-weight:400;color:var(--text3)">(°, 0°=Est)</span></label>
+        <input name="heading" type="number" step="any" value="${a.heading ?? 0}" placeholder="0">
+      </div>
+      <div class="field">
+        <label>Vitesse linéaire [min max]</label>
+        <input name="vel" value="${a.vel_min ?? 0} ${a.vel_max ?? 5}">
+      </div>
+      <div class="field fw">
+        <label>Mission</label>
+        <div class="mission-row">
+          <select name="task" class="task-select"
+            onchange="updateExtra('${name}', this.value)">
+            ${Object.entries(refreshTaskCatalog()).map(([k, t]) =>
+              `<option value="${k}" ${k === parsed.task ? 'selected' : ''}>${t.label}</option>`
+            ).join('')}
+          </select>
+          <div class="mission-extra" id="mex-${name}"></div>
+          <div class="mission-deps" id="mdep-${name}"></div>
+        </div>
+      </div>
+      <div class="fw" id="cond-${name}"></div>
+    </div>
+  `;
+  // Stashed so updateMissionDeps() can default a dependency dropdown to
+  // whatever this agent was already wired to (e.g. re-opening a saved scenario).
+  div.querySelector('.form-grid')._initConditions = initConds;
+
+  // updateExtra()/updateConditions() look elements up via document.getElementById,
+  // which only finds them once `div` is attached to the live document — so this
+  // must run AFTER the caller appends it, not before. Previously deferred via
+  // setTimeout(fn, 0), which worked but left a brief window where a
+  // fast/automated sequence of appends could run before the timer fired; calling
+  // this explicitly, synchronously, right after append (see renderEditor/addAgent)
+  // removes that timing gap entirely.
+  div._finalizeCard = () => {
+    // skipDeps: true — this runs once per card while renderEditor()/addAgent() are
+    // still attaching the OTHER cards to the DOM, so a dependency dropdown (e.g.
+    // "Agent «drone»") built right now wouldn't see every candidate agent yet.
+    // The caller does one complete refreshAllMissionDeps() itself once every card
+    // in the batch is attached — building it here too would render it prematurely
+    // with an incomplete agent list, and that empty/wrong selection would then be
+    // (wrongly) treated as "the live value to preserve" on every later re-render,
+    // permanently hiding the value this scenario was actually saved with.
+    updateExtra(name, parsed.task, parsed.extra, { skipDeps: true });
+    updateConditions(name, parsed.task, initConds);
+  };
+  return div;
+}
+
+function parseMission(str) {
+  const p = str.trim().split(/\s+/);
+  return { task: p[0] || 'veiller', extra: p.slice(2) };
+}
+
+function updateExtra(agentName, task, init = [], { skipDeps = false } = {}) {
+  const el = document.getElementById(`mex-${agentName}`);
+  if (!el) return;
+  const type = getTaskMeta(task).extra || 'none';
+
+  if (type === 'none') {
+    el.innerHTML = '';
+  } else if (type === 'pos') {
+    el.innerHTML = `
+      <input name="mission_lat" type="number" step="any"
+        placeholder="Latitude cible" value="${init[0] ?? ''}">
+      <input name="mission_lon" type="number" step="any"
+        placeholder="Longitude cible" value="${init[1] ?? ''}">
+    `;
+  } else {
+    const others = [...document.querySelectorAll('.form-grid')]
+      .map(d => d.dataset.agent).filter(n => n && n !== agentName);
+    el.innerHTML = `
+      <select name="mission_target">
+        <option value="">Sélectionner une cible…</option>
+        ${others.map(n =>
+          `<option value="${n}" ${n === (init[0] ?? '') ? 'selected' : ''}>${n}</option>`
+        ).join('')}
+      </select>
+    `;
+  }
+
+  // When task changes via dropdown (not on init), reset conditions
+  if (init.length === 0) updateConditions(agentName, task, {});
+  if (!skipDeps) refreshAllMissionDeps();
+}
+
+function addAgent() {
+  const name = prompt('Nom du nouvel agent :');
+  if (!name?.trim()) return;
+  const card = buildCard(name.trim(), {});
+  document.getElementById('agents-wrap').appendChild(card);
+  card._finalizeCard();
+  // So every OTHER agent's dependency dropdown (e.g. "Agent «drone»") picks up
+  // this new agent as a selectable option right away.
+  refreshAllMissionDeps();
+}
+
+function removeCard(name) {
+  document.getElementById(`ac-${name}`)?.remove();
+  refreshAllMissionDeps();
+}
+
+// ── Mission → other-agent dependencies ────────────────────────────────────────
+// A mission can need ANOTHER agent to play a specific role — e.g. "who is the
+// cible" for suivre_agent/reconnaissance, "who is the zone" for surveiller_zone
+// — a distance precondition's target or a subtask arg referencing a "__xxx__"
+// token. Rather than requiring that other agent to be manually flagged with a
+// matching role/marker, each such dependency gets a dropdown of the agents
+// already in this scenario, wired directly (see _resolve_agent_token,
+// bdd/tasks_methods.py: an explicit per-agent "conditions.<name> = <chosen>"
+// always wins over automatic role/marker/proximity resolution).
+const _MISSION_DEP_SKIP = new Set([
+  '__self__', '__any__', '__base_location__', '__base_position__', '__destination__',
+]);
+
+function getTaskAgentDeps(taskName, visited = new Set()) {
+  if (!kbData || !taskName || visited.has(taskName)) return new Set();
+  visited.add(taskName);
+  const task = kbData.tasks?.[taskName];
+  if (!task) return new Set();
+
+  const deps = new Set();
+  for (const method of task.methods || []) {
+    for (const c of method.preconditions || []) {
+      if ((c.type === 'distance_below' || c.type === 'distance_above')
+          && c.target && !_MISSION_DEP_SKIP.has(c.target)) {
+        deps.add(c.target);
+      }
+    }
+    for (const st of method.subtasks || []) {
+      for (const a of st.args || []) {
+        if (a && !_MISSION_DEP_SKIP.has(a)) deps.add(a);
+      }
+      getTaskAgentDeps(st.task, visited).forEach(d => deps.add(d));
+    }
+  }
+  return deps;
+}
+
+// A "__xxx__" token gets an explicit "pick which agent" dropdown, keyed by its
+// RAW name (e.g. "cible" from "__cible__") — that's the exact key
+// _resolve_agent_token() checks on this agent's own conditions, regardless of
+// what the token resolves to by default. "isAuto" (resolves to "__any__" —
+// nearest-agent auto-detection) just changes the placeholder option's wording;
+// it's still overridable. Anything that ISN'T a "__xxx__" token is a literal
+// exact agent name hardcoded in the KB itself — no dropdown, just a
+// present/absent check.
+function resolveMissionDeps(taskName) {
+  const seen = new Set();
+  const out = [];
+  for (const rawToken of getTaskAgentDeps(taskName)) {
+    if (seen.has(rawToken)) continue;
+    seen.add(rawToken);
+    if (/^__.+__$/.test(rawToken)) {
+      const resolved = kbData?.resolve_tokens?.[rawToken] || rawToken;
+      out.push({
+        kind: 'role',
+        norm: rawToken.replace(/^__|__$/g, ''),
+        isAuto: resolved === '__any__',
+        label: `Agent « ${rawToken.replace(/^__|__$/g, '')} »`,
+      });
+    } else {
+      out.push({ kind: 'named', norm: rawToken, label: `un agent nommé exactement « ${rawToken} »` });
+    }
+  }
+  return out;
+}
+
+function updateMissionDeps(agentName, taskName) {
+  const el = document.getElementById(`mdep-${agentName}`);
+  const formGrid = document.querySelector(`.form-grid[data-agent="${agentName}"]`);
+  if (!el || !formGrid) return;
+
+  const others = [...document.querySelectorAll('.form-grid')]
+    .map(d => d.dataset.agent).filter(n => n && n !== agentName);
+
+  el.innerHTML = resolveMissionDeps(taskName).map(d => {
+    if (d.kind === 'named') {
+      const ok = others.includes(d.norm);
+      return `<div class="mission-dep ${ok ? 'ok' : 'warn'}">${ok ? '✓' : '⚠'} Nécessite ${d.label}${ok ? '' : ' — absent du scénario actuel'}</div>`;
+    }
+    // Preserve the current live selection across re-renders (triggered by
+    // OTHER agents changing) — falls back to the value this scenario was
+    // saved with, the first time this card is rendered.
+    const prevSel = formGrid.querySelector(`[data-dep="${d.norm}"]`);
+    const current = prevSel ? prevSel.value : (formGrid._initConditions?.[d.norm] || '');
+    return `
+      <div class="mission-dep-row">
+        <label>${escHtml(d.label)}</label>
+        <select class="dep-agent-sel" data-dep="${escHtml(d.norm)}" onchange="refreshAllMissionDeps()">
+          <option value="">${d.isAuto ? 'Automatique (agent le plus proche)' : 'Sélectionner un agent…'}</option>
+          ${others.map(n => `<option value="${escHtml(n)}" ${n === current ? 'selected' : ''}>${escHtml(n)}</option>`).join('')}
+        </select>
+      </div>`;
+  }).join('');
+}
+
+function refreshAllMissionDeps() {
+  document.querySelectorAll('.form-grid').forEach(div => {
+    const aname = div.dataset.agent;
+    const task = div.querySelector('[name="task"]')?.value;
+    if (aname && task) updateMissionDeps(aname, task);
+  });
+}
+
+// A condition change on ANY agent can affect what's available to pick from
+// (renamed/added/removed agents) — delegated so newly-added cards are covered
+// too. The ".dep-agent-sel" dropdowns themselves already call
+// refreshAllMissionDeps() directly on change (see updateMissionDeps).
+document.addEventListener('input', e => {
+  if (e.target.matches('[name^="cond_"]')) refreshAllMissionDeps();
+});
+
+function collectAgents() {
+  const data = {};
+  document.querySelectorAll('.form-grid').forEach(div => {
+    const aname = div.dataset.agent;
+    const g = n => div.querySelector(`[name="${n}"]`)?.value?.trim() ?? '';
+    const [vm, vM] = g('vel').split(/\s+/).map(Number);
+
+    const task = g('task');
+    const type = getTaskMeta(task).extra ?? 'none';
+    let mission = `${task} ${aname}`;
+    if (type === 'pos') {
+      const lat = g('mission_lat'), lon = g('mission_lon');
+      if (lat && lon) mission += ` ${lat} ${lon}`;
+    } else if (type === 'target') {
+      const t = g('mission_target');
+      if (t) mission += ` ${t}`;
+    }
+
+    const conditions = collectConditions(div);
+    // Explicit "who plays this role for me" wiring (see updateMissionDeps) —
+    // stored as conditions.<dep> = "<chosen agent>", read by
+    // _resolve_agent_token() (bdd/tasks_methods.py) ahead of any automatic
+    // role/marker/proximity resolution.
+    div.querySelectorAll('.dep-agent-sel').forEach(sel => {
+      if (sel.dataset.dep && sel.value) conditions[sel.dataset.dep] = sel.value;
+    });
+
+    data[aname] = {
+      x: parseFloat(g('x')) || 0,
+      y: parseFloat(g('y')) || 0,
+      model: g('model') || 'wamv',
+      heading: parseFloat(g('heading')) || 0,
+      vel_min: isNaN(vm) ? 0 : vm,
+      vel_max: isNaN(vM) ? 5 : vM,
+      ang_vel: 0.05,
+      conditions,
+      mission: mission.trim(),
+    };
+  });
+  return data;
+}
+
+// Same check as the live per-card hints (updateMissionDeps), run across every
+// agent at once — used to warn on save even for a card the user never scrolled to.
+function collectUnmetMissionDeps() {
+  const issues = [];
+  const allNames = [...document.querySelectorAll('.form-grid')].map(d => d.dataset.agent);
+  document.querySelectorAll('.form-grid').forEach(div => {
+    const aname = div.dataset.agent;
+    const task = div.querySelector('[name="task"]')?.value;
+    if (!aname || !task) return;
+    for (const dep of resolveMissionDeps(task)) {
+      if (dep.kind === 'named') {
+        if (!allNames.includes(dep.norm)) issues.push(`${aname} : ${dep.label}`);
+      } else if (!dep.isAuto) {
+        const sel = div.querySelector(`[data-dep="${dep.norm}"]`);
+        if (!sel || !sel.value) issues.push(`${aname} : ${dep.label} — non assigné`);
+      }
+    }
+  });
+  return issues;
+}
+
+function saveScenario() {
+  const inp = document.getElementById('sc-name-inp');
+  const name = inp?.value?.trim();
+  if (!name) { toast('Entrez un nom de scénario.'); return; }
+  const scName = current || name;
+  const unmet = collectUnmetMissionDeps();
+  fetch(`/api/scenario/${scName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(collectAgents()),
+  }).then(() => {
+    const wasNew = !current;
+    current = scName;
+    if (wasNew) {
+      fetch(`/api/scenario/${scName}`).then(r => r.json()).then(agents => {
+        renderEditor(scName, agents, false);
+        loadList();
+      });
+    } else {
+      if (inp) { inp.value = scName; inp.readOnly = true; }
+      loadList();
+    }
+    // Saved regardless — this is a heads-up, not a block: a mission whose
+    // required agent is missing will just silently do nothing at runtime.
+    toast(unmet.length
+      ? `Scénario enregistré — ⚠ ${unmet.length} dépendance(s) manquante(s) : ${unmet.join(' · ')}`
+      : 'Scénario enregistré — ' + scName);
+  });
+}
+
+function deleteScenario(name) {
+  if (!confirm(`Supprimer le scénario « ${name} » ?`)) return;
+  fetch(`/api/scenario/${name}`, { method: 'DELETE' }).then(() => {
+    if (current === name) {
+      current = null;
+      document.getElementById('editor').innerHTML = `
+        <div class="editor-empty">
+          <div class="icon">⚓</div>
+          <p>Sélectionnez un scénario ou créez-en un nouveau.</p>
+        </div>`;
+    }
+    toast('Scénario supprimé — ' + name);
+    loadList();
+  });
+}
+
+function launchScenario(name) {
+  const statusEl = document.getElementById('launch-status');
+  const btn = document.querySelector('.btn-launch');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Lancement…'; }
+
+  fetch(`/api/scenario/${name}/launch`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (statusEl) statusEl.innerHTML = `
+        <div class="launch-status running">
+          ● main.py lancé — scénario : <strong>${name}</strong> · PID ${d.pid}
+        </div>`;
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
+    })
+    .catch(() => {
+      if (statusEl) statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
+    });
+}
+
+function computePlan() {
+  const name = current || document.getElementById('sc-name-inp')?.value?.trim();
+  if (!name) { toast('Enregistrez d\'abord le scénario.'); return; }
+  fetch(`/api/scenario/${name}/plan`).then(r => r.json()).then(plans => {
+    const sec  = document.getElementById('plan-section');
+    const body = document.getElementById('plan-body');
+    if (!sec || !body) return;
+    sec.style.display = 'block';
+    body.innerHTML = Object.entries(plans).map(([agent, plan]) => {
+      let cls = 'plan-val';
+      if (plan.startsWith('[]'))    cls += ' empty';
+      if (plan.startsWith('Aucun')) cls += ' waiting';
+      return `
+        <div class="plan-row">
+          <div class="plan-agent">${agent}</div>
+          <div class="${cls}">${escHtml(plan)}</div>
+        </div>`;
+    }).join('');
+    sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
+// ── Conditions initiales (scenario editor) ────────────────────────────────────
+
+// Collect all unique variable names from preconditions (recursive through subtasks).
+function getTaskCondVars(taskName, visited = new Set()) {
+  if (visited.has(taskName) || !kbData) return new Map();
+  visited.add(taskName);
+  const task = kbData.tasks?.[taskName];
+  if (!task) return new Map();
+  // Map: variable → first concrete value seen (to guess bool vs text)
+  const vars = new Map();
+  for (const method of task.methods) {
+    for (const c of method.preconditions) {
+      const varName = c.variable || '';
+      if (varName && !vars.has(varName)) {
+        vars.set(varName, c.value ?? '');
+      }
+    }
+    for (const st of method.subtasks) {
+      for (const [k, v] of getTaskCondVars(st.task, visited)) {
+        if (!vars.has(k)) vars.set(k, v);
+      }
+    }
+  }
+  return vars;
+}
+
+function updateConditions(agentName, taskName, initConds = {}) {
+  const el = document.getElementById(`cond-${agentName}`);
+  if (!el) return;
+
+  const vars = getTaskCondVars(taskName);
+  for (const arg of getTaskRequiredArgs(taskName)) {
+    const varName = arg.replace(/^__|__$/g, '');
+    if (!vars.has(varName)) {
+      vars.set(varName, '');
+    }
+  }
+  if (!vars.size) { el.innerHTML = ''; return; }
+
+  const LOCATION_VARS = new Set(['base_location', 'base_pos', 'base_position']);
+  const rows = [];
+  for (const [varName, sampleVal] of vars) {
+    const isBool = String(sampleVal).toLowerCase() === 'true' || String(sampleVal).toLowerCase() === 'false';
+    const isLoc  = LOCATION_VARS.has(varName);
+    const cur = varName in initConds ? initConds[varName] : sampleVal;
+    const curStr = String(cur ?? sampleVal);
+    const isCurTrue = curStr.toLowerCase() !== 'false' && curStr !== '' && curStr !== '0';
+    const label = varName === 'base_location' ? 'Position de la base'
+                : varName.replace(/_/g, ' ');
+
+    if (isBool) {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <select name="cond_${escHtml(varName)}" class="cond-sel">
+            <option value="true"  ${isCurTrue  ? 'selected' : ''}>Oui</option>
+            <option value="false" ${!isCurTrue ? 'selected' : ''}>Non</option>
+          </select>
+        </div>`);
+    } else if (isLoc) {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <input name="cond_${escHtml(varName)}" class="cond-inp"
+            placeholder="lat lon  ex: 1.2605 103.7516" value="${escHtml(curStr)}">
+        </div>`);
+    } else {
+      rows.push(`
+        <div class="cond-row">
+          <span class="cond-label">${escHtml(label)}</span>
+          <input name="cond_${escHtml(varName)}" class="cond-inp"
+            placeholder="valeur" value="${escHtml(curStr)}">
+        </div>`);
+    }
+  }
+
+  el.innerHTML = `
+    <div class="cond-section">
+      <span class="cond-section-title">Conditions initiales</span>
+      ${rows.join('')}
+    </div>`;
+}
+
+function collectConditions(div) {
+  const cond = {};
+  div.querySelectorAll('[name^="cond_"]').forEach(inp => {
+    const key = inp.name.slice(5); // strip 'cond_'
+    if (inp.tagName === 'SELECT') {
+      cond[key] = inp.value === 'true';
+    } else if (inp.value.trim()) {
+      cond[key] = inp.value.trim();
+    }
+  });
+  return cond;
+}
+
+// ── KB Editor ─────────────────────────────────────────────────────────────────
+let kbData = null;
+let kbTabRendered = false;  // true once #kb-tasks has actually been built, not just kbData fetched
+
+// Auto-save on ANY edit within the KB tab — typing in a field, adding a task/method/
+// subtask/precondition/argument, or reordering methods. Delegated + debounced so we
+// don't fire a save per keystroke; deletions call saveKB() immediately themselves.
+let _kbAutoSaveTimer = null;
+function scheduleKBAutoSave() {
+  clearTimeout(_kbAutoSaveTimer);
+  _kbAutoSaveTimer = setTimeout(saveKB, 700);
+}
+// #kb-tasks is static HTML already present at this point in the document, so this
+// delegated listener is safe to attach immediately (no need to wait for DOMContentLoaded).
+document.getElementById('kb-tasks').addEventListener('input', scheduleKBAutoSave);
+document.getElementById('kb-tasks').addEventListener('change', scheduleKBAutoSave);
+
+// ── Agent picker (Moi / N'importe quel agent / Agent spécifique) ─────────────
+// Known generic tokens offered under "Agent spécifique", beyond a free-typed name.
+const KNOWN_AGENT_TOKENS = [
+  { value: '__intruder__',      label: 'Intrus (__intruder__)' },
+  { value: '__cible__',         label: 'Cible suivie (__cible__)' },
+  { value: '__base_location__', label: 'Base (__base_location__)' },
+  { value: '__zone__',          label: 'Zone (__zone__)' },
+];
+
+// Builds a "Moi / N'importe quel agent / Agent spécifique" picker that keeps a
+// hidden input (of hiddenClassName) in sync — so any code reading that input's
+// .value (collectKB(), subtask-arg collection) doesn't need to know this exists.
+function buildAgentPicker(initialValue, hiddenClassName, { allowAny = true } = {}) {
+  const wrap = document.createElement('span');
+  wrap.className = 'agent-picker';
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.className = hiddenClassName;
+
+  const modeSel = document.createElement('select');
+  modeSel.className = 'agent-picker-mode';
+  modeSel.appendChild(new Option('Moi', '__self__'));
+  if (allowAny) modeSel.appendChild(new Option('N’importe quel agent', '__any__'));
+  modeSel.appendChild(new Option('Agent spécifique', '__specific__'));
+
+  const specificSel = document.createElement('select');
+  specificSel.className = 'agent-picker-specific';
+  KNOWN_AGENT_TOKENS.forEach(t => specificSel.appendChild(new Option(t.label, t.value)));
+  specificSel.appendChild(new Option('Autre (nom exact…)', '__custom__'));
+
+  const customInp = document.createElement('input');
+  customInp.className = 'agent-picker-custom';
+  customInp.placeholder = 'nom exact de l’agent';
+
+  function sync() {
+    const v = modeSel.value === '__specific__'
+      ? (specificSel.value === '__custom__' ? customInp.value.trim() : specificSel.value)
+      : modeSel.value;
+    hidden.value = v;
+    specificSel.style.display = modeSel.value === '__specific__' ? '' : 'none';
+    customInp.style.display = modeSel.value === '__specific__' && specificSel.value === '__custom__' ? '' : 'none';
+    // Bubble a synthetic "input" event so the KB tab's delegated auto-save listener sees it.
+    hidden.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function setValue(v) {
+    if (v === '__self__' || (allowAny && v === '__any__')) {
+      modeSel.value = v;
+    } else {
+      modeSel.value = '__specific__';
+      const known = KNOWN_AGENT_TOKENS.some(t => t.value === v);
+      specificSel.value = known ? v : '__custom__';
+      if (!known) customInp.value = v || '';
+    }
+    sync();
+  }
+
+  modeSel.addEventListener('change', sync);
+  specificSel.addEventListener('change', sync);
+  customInp.addEventListener('input', sync);
+
+  wrap.append(modeSel, specificSel, customInp, hidden);
+  setValue(initialValue || '__self__');
+  return wrap;
+}
+
+// Every precondition type a method can use. The "distance_*" ones need no
+// separate trigger/topic setup — they're evaluated live from agent positions
+// each time the plan is (re)computed.
+const PRECOND_OPS = [
+  { value: 'state_equals',   label: 'variable = valeur',        kind: 'state'    },
+  { value: 'state_below',    label: 'variable < valeur',        kind: 'state'    },
+  { value: 'state_above',    label: 'variable > valeur',        kind: 'state'    },
+  { value: 'state_present',  label: 'variable définie',          kind: 'present' },
+  { value: 'distance_below', label: 'distance à… < seuil',       kind: 'distance' },
+  { value: 'distance_above', label: 'distance à… > seuil',       kind: 'distance' },
+];
+const PRECOND_KIND = Object.fromEntries(PRECOND_OPS.map(o => [o.value, o.kind]));
+
+function loadKB() {
+  fetch('/api/kb').then(r => r.json()).then(kb => {
+    kbData = kb;
+    refreshTaskCatalog(kb);
+    renderKB(kb);
+  });
+}
+
+function reloadKBFromServer() {
+  if (!confirm('Recharger depuis le serveur ? Toute modification non sauvegardée sera perdue.')) return;
+  loadKB();
+  toast('Base de connaissances rechargée depuis le serveur');
+}
+
+function renderKB(kb) {
+  const tasksEl = document.getElementById('kb-tasks');
+  tasksEl.innerHTML = '';
+  for (const [name, def] of Object.entries(kb.tasks || {})) {
+    try {
+      tasksEl.appendChild(buildTaskCard(name, def));
+    } catch(e) {
+      console.error(`buildTaskCard(${name}):`, e);
+    }
+  }
+
+  document.getElementById('kb-leaf').innerHTML = Object.entries(kb.leaf_tasks || {}).map(([k, v]) => {
+    const label = v?.label || v;
+    const args = Array.isArray(v?.args) ? ` (${v.args.join(', ')})` : '';
+    return `<div class="kb-locked-item"><code>${escHtml(k)}</code><span>${escHtml(label)}${escHtml(args)}</span></div>`;
+  }).join('');
+
+  kbTabRendered = true;
+}
+
+function buildTaskCard(taskName, taskDef) {
+  const card = document.createElement('div');
+  card.className = 'task-card';
+  card.dataset.task = taskName;
+
+  const head = document.createElement('div');
+  head.className = 'task-head';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'task-arrow';
+  arrow.textContent = '▶';
+
+  const keyBadge = document.createElement('span');
+  keyBadge.className = 'task-key';
+  keyBadge.textContent = taskName;
+
+  const labelInp = document.createElement('input');
+  labelInp.className = 'task-label-inp';
+  labelInp.value = taskDef.label || taskName;
+  labelInp.placeholder = 'Libellé';
+  labelInp.addEventListener('click', e => e.stopPropagation());
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'icon-btn task-del';
+  delBtn.title = 'Supprimer cette tâche (sauvegardé immédiatement)';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!confirm(`Supprimer la tâche "${taskName}" ? Ceci sera sauvegardé immédiatement.`)) return;
+    card.remove();
+    saveKB();
+  });
+
+  head.append(arrow, keyBadge, labelInp, delBtn);
+  head.addEventListener('click', () => {
+    head.classList.toggle('open');
+    body.classList.toggle('open');
+  });
+
+  const body = document.createElement('div');
+  body.className = 'task-body';
+
+  const methodsList = document.createElement('div');
+  methodsList.className = 'methods-list';
+  (taskDef.methods || []).forEach(m => methodsList.appendChild(buildMethodCard(m)));
+  body.appendChild(methodsList);
+
+  const addMethodBtn = document.createElement('button');
+  addMethodBtn.className = 'mini-btn';
+  addMethodBtn.style.marginTop = '8px';
+  addMethodBtn.textContent = '+ Ajouter une méthode';
+  addMethodBtn.onclick = () => methodsList.appendChild(buildMethodCard({ name: '', preconditions: [], subtasks: [] }));
+  body.appendChild(addMethodBtn);
+
+  card.append(head, body);
+  return card;
+}
+
+function buildMethodCard(method) {
+  const card = document.createElement('div');
+  card.className = 'method-card';
+
+  const head = document.createElement('div');
+  head.className = 'method-head';
+
+  const badge = document.createElement('span');
+  badge.className = 'method-badge';
+  badge.textContent = 'Méthode';
+
+  const nameInp = document.createElement('input');
+  nameInp.className = 'method-name-inp';
+  nameInp.value = method.name || '';
+  nameInp.placeholder = 'Nom de cette méthode…';
+
+  const upBtn = document.createElement('button');
+  upBtn.className = 'move-btn';
+  upBtn.title = 'Monter';
+  upBtn.textContent = '↑';
+  upBtn.onclick = () => moveCard(card, -1);
+
+  const downBtn = document.createElement('button');
+  downBtn.className = 'move-btn';
+  downBtn.title = 'Descendre';
+  downBtn.textContent = '↓';
+  downBtn.onclick = () => moveCard(card, 1);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del-btn';
+  delBtn.title = 'Supprimer cette méthode (sauvegardé immédiatement)';
+  delBtn.textContent = '×';
+  delBtn.onclick = () => { card.remove(); saveKB(); };
+
+  head.append(badge, nameInp, upBtn, downBtn, delBtn);
+  card.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'method-body';
+
+  // — Preconditions column —
+  const precCol = document.createElement('div');
+  const precTitle = document.createElement('div');
+  precTitle.className = 'method-col-title';
+  precTitle.textContent = 'Préconditions';
+  precCol.appendChild(precTitle);
+
+  const precList = document.createElement('div');
+  precList.className = 'precond-list';
+  (method.preconditions || []).forEach(c => precList.appendChild(buildPrecondRow(c)));
+  precCol.appendChild(precList);
+
+  const addPrecBtn = document.createElement('button');
+  addPrecBtn.className = 'mini-btn';
+  addPrecBtn.textContent = '+ Précondition';
+  addPrecBtn.onclick = () => precList.appendChild(buildPrecondRow({}));
+  precCol.appendChild(addPrecBtn);
+
+  // — Subtasks column —
+  const stCol = document.createElement('div');
+  const stTitle = document.createElement('div');
+  stTitle.className = 'method-col-title';
+  stTitle.textContent = 'Sous-tâches (ordre)';
+  stCol.appendChild(stTitle);
+
+  const stList = document.createElement('div');
+  stList.className = 'subtask-list';
+  (method.subtasks || []).forEach(st => stList.appendChild(buildSubtaskRow(st)));
+  stCol.appendChild(stList);
+
+  const addStBtn = document.createElement('button');
+  addStBtn.className = 'mini-btn';
+  addStBtn.textContent = '+ Sous-tâche';
+  addStBtn.onclick = () => stList.appendChild(buildSubtaskRow({ task: '', args: [] }));
+  stCol.appendChild(addStBtn);
+
+  body.append(precCol, stCol);
+  card.appendChild(body);
+  return card;
+}
+
+// Map legacy hardcoded condition types to the new generic format
+function _legacyToGeneric(cond) {
+  const map = {
+    drone_available: { variable: 'drone_available', value: 'true'  },
+    drone_absent:    { variable: 'drone_available', value: 'false' },
+    intruder_nearby: { variable: 'intruder_nearby', value: 'true'  },
+    weather_equals:  { variable: 'weather',          value: cond.value || '' },
+    agent_present:   { variable: cond.value || '',   value: 'true'  },
+    agent_absent:    { variable: cond.value || '',   value: 'false' },
+  };
+  return map[cond.type] || { variable: cond.variable || '', value: cond.value || '' };
+}
+
+function buildPrecondRow(cond) {
+  const row = document.createElement('div');
+  row.className = 'precond-row';
+
+  // Normalise legacy format
+  const isNew = cond.type && (cond.type.startsWith('state_') || cond.type.startsWith('distance_'));
+  const norm = isNew ? cond : { type: 'state_equals', ..._legacyToGeneric(cond) };
+  const kind = PRECOND_KIND[norm.type] || 'state';
+
+  const opSel = document.createElement('select');
+  opSel.className = 'prec-type-sel';
+  PRECOND_OPS.forEach(op => {
+    const opt = document.createElement('option');
+    opt.value = op.value;
+    opt.textContent = op.label;
+    if (norm.type === op.value) opt.selected = true;
+    opSel.appendChild(opt);
+  });
+
+  // First field: a plain "variable" name input for state checks, or the agent-picker
+  // (Moi / N'importe quel agent / Agent spécifique) for a distance "target" — rebuilt
+  // whenever the precondition type switches between these two shapes.
+  const field1Wrap = document.createElement('span');
+  field1Wrap.className = 'prec-field1-wrap';
+
+  // Second field: "value" for state checks, "threshold" (degrees) for distance — hidden for state_present
+  const field2Inp = document.createElement('input');
+  field2Inp.className = 'prec-val-inp';
+  field2Inp.value = kind === 'distance' ? (norm.threshold ?? '') : (norm.value ?? '');
+
+  // Optional per-agent override key for a distance threshold (e.g. "eviter_threshold")
+  // — bdd/tasks_methods.py::_check reads conditions.<threshold_var> on the asking
+  // agent first, falling back to the literal threshold above when unset. Only
+  // meaningful for distance preconditions; collectKB() must round-trip this even
+  // when left blank as "" (omitted), otherwise every KB autosave silently erases it.
+  const thresholdVarInp = document.createElement('input');
+  thresholdVarInp.className = 'prec-thresholdvar-inp';
+  thresholdVarInp.placeholder = 'variable de seuil (optionnel)';
+  thresholdVarInp.title = 'Nom de condition qui, si présent sur l\'agent, remplace le seuil ci-dessus (ex: eviter_threshold)';
+  thresholdVarInp.value = norm.threshold_var || '';
+
+  function rebuildField1() {
+    const k = PRECOND_KIND[opSel.value] || 'state';
+    field1Wrap.innerHTML = '';
+    if (k === 'distance') {
+      field1Wrap.appendChild(buildAgentPicker(norm.target || '__self__', 'prec-var-inp'));
+    } else {
+      const inp = document.createElement('input');
+      inp.className = 'prec-var-inp';
+      inp.placeholder = 'variable';
+      inp.value = norm.variable || '';
+      field1Wrap.appendChild(inp);
+    }
+  }
+
+  function applyKindUI() {
+    const k = PRECOND_KIND[opSel.value] || 'state';
+    rebuildField1();
+    field2Inp.style.display = k === 'present' ? 'none' : '';
+    field2Inp.placeholder = k === 'distance' ? 'seuil (degrés, ex 0.003)' : 'valeur';
+    field2Inp.type = k === 'distance' ? 'number' : 'text';
+    thresholdVarInp.style.display = k === 'distance' ? '' : 'none';
+  }
+  opSel.addEventListener('change', applyKindUI);
+  applyKindUI();
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.title = 'Supprimer cette précondition (sauvegardé immédiatement)';
+  del.textContent = '×';
+  del.addEventListener('click', e => { e.stopPropagation(); row.remove(); saveKB(); });
+
+  row.append(opSel, field1Wrap, field2Inp, thresholdVarInp, del);
+  return row;
+}
+
+function buildSubtaskRow(st) {
+  const row = document.createElement('div');
+  row.className = 'subtask-row';
+
+  // Top: task selector + delete
+  const top = document.createElement('div');
+  top.className = 'subtask-top';
+
+  const taskSel = document.createElement('select');
+  taskSel.className = 'subtask-task-sel';
+
+  // All HTN tasks + leaf tasks (not primitives)
+  const allTasks = Object.assign({}, kbData?.tasks || {},
+    Object.fromEntries(Object.entries(kbData?.leaf_tasks || {}).map(([k, v]) => [k, { label: v.label || v }]))
+  );
+  Object.entries(allTasks).forEach(([k, v]) => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = v.label || k;
+    if (k === st.task) opt.selected = true;
+    taskSel.appendChild(opt);
+  });
+
+  const stDel = document.createElement('button');
+  stDel.className = 'del-btn';
+  stDel.textContent = '×';
+  stDel.title = 'Supprimer sous-tâche (sauvegardé immédiatement)';
+  stDel.onclick = () => { row.remove(); saveKB(); };
+
+  top.append(taskSel, stDel);
+  row.appendChild(top);
+
+  // Arguments row — the count and kind of slots are fixed by the selected
+  // task's signature (getArgSpec), not user-editable: no more "+ arg"/"remove
+  // arg" controls, just a dropdown per slot.
+  const argsRow = document.createElement('div');
+  argsRow.className = 'subtask-args-row';
+
+  const argsLabel = document.createElement('span');
+  argsLabel.className = 'args-label';
+  argsLabel.textContent = 'Args :';
+  argsRow.appendChild(argsLabel);
+
+  function rebuildArgs(existingValues) {
+    argsRow.querySelectorAll('.arg-chip').forEach(c => c.remove());
+    getArgSpec(taskSel.value).forEach((kind, i) => {
+      const val = existingValues[i] !== undefined
+        ? existingValues[i]
+        : (kind === 'position' ? '__base_location__' : '__self__');
+      argsRow.appendChild(buildArgChip(val, kind));
+    });
+  }
+
+  rebuildArgs(st.args || []);
+  taskSel.addEventListener('change', () => { rebuildArgs([]); saveKB(); });
+
+  row.appendChild(argsRow);
+  return row;
+}
+
+// Position-typed args (aller/aller_a_position) resolve to a (lat, lon) tuple,
+// not an agent name — so they get their own dropdown instead of the agent picker.
+const KNOWN_POSITION_TOKENS = [
+  { value: '__base_location__', label: 'Base (__base_location__)' },
+  { value: '__destination__',   label: 'Destination (__destination__)' },
+];
+
+function buildPositionPicker(initialValue, hiddenClassName) {
+  const wrap = document.createElement('span');
+  wrap.className = 'agent-picker';
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.className = hiddenClassName;
+
+  const modeSel = document.createElement('select');
+  modeSel.className = 'agent-picker-mode';
+  KNOWN_POSITION_TOKENS.forEach(t => modeSel.appendChild(new Option(t.label, t.value)));
+  modeSel.appendChild(new Option('Position personnalisée (lat lon)', '__custom__'));
+
+  const customInp = document.createElement('input');
+  customInp.className = 'agent-picker-custom';
+  customInp.placeholder = 'lat lon (ex: 1.26 103.75)';
+
+  function sync() {
+    const v = modeSel.value === '__custom__' ? customInp.value.trim() : modeSel.value;
+    hidden.value = v;
+    customInp.style.display = modeSel.value === '__custom__' ? '' : 'none';
+    hidden.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function setValue(v) {
+    const known = KNOWN_POSITION_TOKENS.some(t => t.value === v);
+    modeSel.value = known ? v : '__custom__';
+    if (!known) customInp.value = v || '';
+    sync();
+  }
+
+  modeSel.addEventListener('change', sync);
+  customInp.addEventListener('input', sync);
+
+  wrap.append(modeSel, customInp, hidden);
+  setValue(initialValue || '__base_location__');
+  return wrap;
+}
+
+// Fixed argument count/kind per task — NOT editable by the user, because it's
+// dictated by the Python function signature that actually executes it:
+// composite tasks (kbData.tasks) are always dispatched as method(state, agent),
+// i.e. exactly one "agent" arg — a KB-level task can never have more; leaf tasks
+// each have their own fixed Python signature, declared in kbData.leaf_tasks[].args.
+function getArgSpec(taskName) {
+  if (kbData?.tasks?.[taskName]) return ['agent'];
+  const leaf = kbData?.leaf_tasks?.[taskName];
+  if (leaf && Array.isArray(leaf.args)) return leaf.args;
+  return ['agent'];
+}
+
+function buildArgChip(val, kind = 'agent') {
+  const chip = document.createElement('div');
+  chip.className = 'arg-chip';
+  const picker = kind === 'position'
+    ? buildPositionPicker(val, 'arg-custom-inp')
+    : buildAgentPicker(val, 'arg-custom-inp');
+  chip.appendChild(picker);
+  return chip;
+}
+
+function moveCard(el, dir) {
+  const parent = el.parentNode;
+  if (dir === -1) {
+    const prev = el.previousElementSibling;
+    if (prev) parent.insertBefore(el, prev);
+  } else {
+    const next = el.nextElementSibling;
+    if (next) parent.insertBefore(next, el);
+  }
+  // Method order determines HTN precondition-matching priority — persist it right away.
+  saveKB();
+}
+
+function addTask() {
+  const name = prompt('Identifiant de la nouvelle tâche (ex: inspecter) :');
+  if (!name?.trim()) return;
+  const key = name.trim().replace(/\s+/g, '_');
+  if (kbData?.tasks?.[key]) {
+    toast(`Une tâche "${key}" existe déjà`);
+    return;
+  }
+  const card = buildTaskCard(key, { label: key, methods: [] });
+  card.querySelector('.task-head').classList.add('open');
+  card.querySelector('.task-body').classList.add('open');
+  document.getElementById('kb-tasks').appendChild(card);
+  saveKB();
+}
+
+function collectKB() {
+  // Built purely from what's currently rendered in the DOM — the KB tab always
+  // re-fetches and re-renders every task as a card on open (see switchTab), so a
+  // deleted card must NOT be re-added from a stale kbData snapshot here.
+  const tasks = {};
+
+  document.querySelectorAll('#kb-tasks .task-card').forEach(card => {
+    const taskName = card.dataset.task;
+    const label = card.querySelector('.task-label-inp').value.trim() || taskName;
+    const methods = [];
+
+    card.querySelectorAll('.method-card').forEach(mc => {
+      const name = mc.querySelector('.method-name-inp').value.trim();
+      const preconditions = [];
+      const subtasks = [];
+
+      mc.querySelectorAll('.precond-row').forEach(pr => {
+        const type   = pr.querySelector('.prec-type-sel').value;
+        const field1 = pr.querySelector('.prec-var-inp').value.trim();
+        const field2 = pr.querySelector('.prec-val-inp').value.trim();
+        const thresholdVar = pr.querySelector('.prec-thresholdvar-inp')?.value.trim();
+        const kind   = PRECOND_KIND[type] || 'state';
+        if (!field1) return;
+        if (kind === 'distance') {
+          const cond = { type, target: field1, threshold: parseFloat(field2) || 0 };
+          if (thresholdVar) cond.threshold_var = thresholdVar;
+          preconditions.push(cond);
+        } else if (kind === 'present') {
+          preconditions.push({ type, variable: field1 });
+        } else {
+          preconditions.push({ type, variable: field1, value: field2 });
+        }
+      });
+
+      mc.querySelectorAll('.subtask-row').forEach(sr => {
+        const task = sr.querySelector('.subtask-task-sel').value;
+        // Always push in order, even if a slot is momentarily blank — the
+        // argument count is fixed by the task's signature, so dropping a blank
+        // one would shift every arg after it out of position.
+        const args = [...sr.querySelectorAll('.arg-chip .arg-custom-inp')].map(inp => inp.value.trim());
+        if (task) subtasks.push({ task, args });
+      });
+
+      methods.push({ name, preconditions, subtasks });
+    });
+
+    // DOM version overrides kbData version for tasks that are rendered
+    tasks[taskName] = { label, methods };
+  });
+
+  return {
+    resolve_tokens:    kbData?.resolve_tokens    || {},
+    tasks,
+    leaf_tasks:        kbData?.leaf_tasks        || {},
+    primitive_actions: kbData?.primitive_actions || {},
+  };
+}
+
+function saveKB() {
+  let kb;
+  try {
+    kb = collectKB();
+  } catch (e) {
+    console.error('collectKB() failed:', e);
+    toast('❌ Erreur interne : la sauvegarde a échoué (voir la console)');
+    return;
+  }
+  fetch('/api/kb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(kb),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        kbData = kb;
+        toast('Base de connaissances sauvegardée');
+      } else {
+        toast('Erreur lors de la sauvegarde');
+      }
+    })
+    .catch(() => toast('Erreur réseau'));
+}
+
+// ── IA Scenario Generator ─────────────────────────────────────────────────────
+let generatedScenarioData = null;
+let lastAIDescription = '';
+
+function showAIStatus(msg, isError = false) {
+  const el = document.getElementById('ia-status');
+  const msgEl = document.getElementById('ia-status-msg');
+  el.style.display = 'block';
+  el.style.background = isError ? '#FDECEA' : '#EBF7EE';
+  el.style.borderLeft = `4px solid ${isError ? 'var(--red)' : 'var(--green)'}`;
+  msgEl.textContent = msg;
+  msgEl.style.color = isError ? 'var(--red)' : 'var(--green)';
+}
+
+function showClarificationQuestions(questions) {
+  document.getElementById('ia-clarify-questions').innerHTML =
+    questions.map(q => `<li>${escHtml(q)}</li>`).join('');
+  document.getElementById('ia-clarify-answer').value = '';
+  document.getElementById('ia-clarify').style.display = 'block';
+}
+
+function submitClarificationAnswer() {
+  const answer = document.getElementById('ia-clarify-answer').value.trim();
+  if (!answer) {
+    toast('Veuillez répondre aux questions');
+    return;
+  }
+  const enriched = `${lastAIDescription}\n\nPrécisions supplémentaires : ${answer}`;
+  document.getElementById('ia-description').value = enriched;
+  document.getElementById('ia-clarify').style.display = 'none';
+  generateScenarioFromAI(enriched);
+}
+
+function generateScenarioFromAI(descriptionOverride) {
+  const description = (descriptionOverride ?? document.getElementById('ia-description').value).trim();
+  if (!description) {
+    toast('Veuillez entrer une description');
+    return;
+  }
+  lastAIDescription = description;
+
+  document.getElementById('ia-clarify').style.display = 'none';
+  showAIStatus('⏳ Génération en cours... (peut prendre 30-60 sec)', false);
+  document.getElementById('ia-result').style.display = 'none';
+
+  fetch('/api/generate-scenario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showAIStatus(`❌ Erreur: ${data.error}. ${data.details || ''}`, true);
+        toast('Erreur lors de la génération');
+        return;
+      }
+
+      if (data.cannot_model) {
+        showAIStatus(`🚫 Impossible de générer ce scénario : ${data.reason || 'raison non précisée'}`, true);
+        document.getElementById('ia-clarify').style.display = 'none';
+        return;
+      }
+
+      if (data.needs_clarification) {
+        showAIStatus('❓ Précisions nécessaires avant de générer le scénario', false);
+        showClarificationQuestions(data.questions || []);
+        return;
+      }
+
+      generatedScenarioData = data;
+      displayGeneratedScenario(data);
+      showAIStatus('✅ Scénario généré avec succès!', false);
+
+      // KB may have been updated server-side — refresh so dropdown and KB tab stay in sync
+      if ((data.kb_updates?.added_tasks?.length || 0) > 0 || (data.kb_updates?.added_methods?.length || 0) > 0) {
+        fetch('/api/kb').then(r => r.json()).then(kb => {
+          kbData = kb;
+          refreshTaskCatalog(kb);
+        });
+      }
+    })
+    .catch(err => {
+      showAIStatus(`❌ Erreur: ${err.message}`, true);
+      toast('Erreur réseau');
+    });
+}
+
+function displayGeneratedScenario(data) {
+  // Display agents
+  const agentsList = document.getElementById('ia-agents-list');
+  const agents = data.scenario?.agents || {};
+  if (Object.keys(agents).length === 0) {
+    agentsList.innerHTML = '<em style="color:var(--text3)">Aucun agent généré</em>';
+  } else {
+    agentsList.innerHTML = Object.entries(agents).map(([name, a]) => {
+      const isIntruder = a.role === 'intruder' || a.conditions?.is_intruder;
+      // Every agent shares the same "operer" mission — what actually differs is the
+      // task chain its conditions resolve to. The backend walks that chain for us.
+      const taskPath = (a.resolved_task || ['operer']).map(escHtml).join(' → ');
+      return `
+      <div style="padding:8px;margin-bottom:8px;background:var(--surface);border:1px solid ${isIntruder ? 'var(--red)' : 'var(--border)'};border-radius:4px;font-size:12px">
+        <strong>${escHtml(name)}</strong> ${isIntruder ? '🚩 intrus' : ''} |
+        Pos: (${a.x?.toFixed(2) || '0'}, ${a.y?.toFixed(2) || '0'}) |
+        Modèle: ${escHtml(a.model || 'wamv')}
+        <div style="margin-top:4px;color:var(--blue);font-weight:600">Tâche assignée : ${taskPath}</div>
+      </div>
+    `;
+    }).join('');
+  }
+
+  // Display warnings
+  const warnings = data.warnings || [];
+  const issues = data.issues || {};
+  const kbUpdates = data.kb_updates || {};
+  const warningsDiv = document.getElementById('ia-warnings');
+  const warningsList = document.getElementById('ia-warnings-list');
+  
+  const allWarnings = [...warnings, ...(issues.missing_tasks || []), ...(issues.warnings || [])];
+  if (allWarnings.length === 0) {
+    warningsDiv.style.display = 'none';
+  } else {
+    warningsDiv.style.display = 'block';
+    warningsList.innerHTML = allWarnings.map(w => `<li>${escHtml(w)}</li>`).join('');
+  }
+
+  const kbUpdatesDiv = document.getElementById('ia-kb-updates');
+  const updateLines = [];
+  if (kbUpdates.added_tasks?.length) {
+    updateLines.push(`<div><strong>Tâches ajoutées :</strong> ${kbUpdates.added_tasks.map(escHtml).join(', ')}</div>`);
+  }
+  if (kbUpdates.added_methods?.length) {
+    updateLines.push(`<div><strong>Méthodes ajoutées :</strong> ${kbUpdates.added_methods.map(u => escHtml(`${u.task}:${u.method}`)).join(', ')}</div>`);
+  }
+  kbUpdatesDiv.innerHTML = updateLines.length ? updateLines.join('') : '<em style="color:var(--text3)">Aucune mise à jour de KB</em>';
+
+  // Pre-fill scenario name with the server-generated slug, but keep it editable
+  const rawName = (data.scenario?.name || 'scenario_ia').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  document.getElementById('ia-scenario-name').value = rawName;
+
+  // Show result
+  document.getElementById('ia-result').style.display = 'block';
+  document.getElementById('ia-result').scrollIntoView({ behavior: 'smooth' });
+}
+
+function importGeneratedScenario() {
+  if (!generatedScenarioData) {
+    toast('Aucun scénario généré');
+    return;
+  }
+
+  const scenario = generatedScenarioData.scenario || {};
+
+  // Use the user-edited name field, fallback to server slug
+  const rawName = document.getElementById('ia-scenario-name').value.trim()
+                  || scenario.name || 'scenario_ia';
+  // Sanitize: lowercase, spaces → underscores, only alphanum+underscore
+  const scenarioName = rawName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+  // Build mission string: first item of the array (e.g. "encircle_target __self__")
+  const missionStr = Array.isArray(scenario.mission)
+    ? (scenario.mission[0] || 'veiller __self__')
+    : (scenario.mission || 'veiller __self__');
+
+  // Prepare agents for import
+  const agents = {};
+  for (const [name, a] of Object.entries(scenario.agents || {})) {
+    // Per-agent mission if provided, otherwise use the scenario-level mission.
+    // "__self__" is a placeholder the AI uses for "this agent's own name" — substitute it now.
+    const agentMission = (a.mission || missionStr).replace(/__self__/g, name);
+    agents[name] = {
+      x: a.x || 0,
+      y: a.y || 0,
+      model: a.model || 'wamv',
+      heading: a.heading || 0,
+      vel_min: 0,
+      vel_max: a.velocity || 5,
+      ang_vel: 0.05,
+      conditions: a.conditions || {},
+      mission: agentMission,
+    };
+  }
+
+  // Save via API
+  fetch(`/api/scenario/${scenarioName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(agents)
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        toast(`✅ Scénario importé : ${scenarioName}`);
+        setTimeout(() => {
+          switchTab('scenarios');
+          loadList();
+          selectScenario(scenarioName);
+        }, 500);
+      } else {
+        toast('Erreur lors de l\'import');
+      }
+    })
+    .catch(() => toast('Erreur réseau'));
+}
+
+// ── Shared utils ──────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function warnCoord(input, min, max) {
+  const v = parseFloat(input.value);
+  if (!isNaN(v) && (v < min || v > max)) {
+    input.style.borderColor = '#E8A000';
+    input.title = `⚠ Hors zone Lotusim (${min}–${max}) — le spawn sera ignoré`;
+  } else {
+    input.style.borderColor = '';
+    input.title = '';
+  }
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

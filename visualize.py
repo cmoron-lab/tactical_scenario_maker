@@ -17,10 +17,36 @@ COLORS = {
 DEFAULT_COLOR = '#4CAF50'
 
 def load_csv(path):
+    """
+    Reads a poses/waypoints log, tolerating a log left corrupted by an
+    interrupted run: a process killed abruptly (rather than shut down
+    cleanly) can leave a run of NUL bytes in the CSV — csv.DictReader raises
+    on those outright — and/or a row truncated mid-write. Both are stripped/
+    skipped (with a warning) instead of crashing the whole visualization,
+    since the surrounding valid rows are still worth plotting.
+    """
     if not os.path.exists(path):
         return []
-    with open(path) as f:
-        return list(csv.DictReader(f))
+    with open(path, encoding='utf-8', errors='replace') as f:
+        raw = f.read()
+    nul_count = raw.count('\x00')
+    if nul_count:
+        print(f"⚠ {path} : {nul_count} octet(s) NUL (écriture interrompue) — nettoyés avant lecture.")
+        raw = raw.replace('\x00', '')
+
+    rows = []
+    skipped = 0
+    for row in csv.DictReader(raw.splitlines()):
+        try:
+            float(row.get('lat', ''))
+            float(row.get('lon', ''))
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        rows.append(row)
+    if skipped:
+        print(f"⚠ {path} : {skipped} ligne(s) mal formée(s) ignorée(s).")
+    return rows
 
 def main():
     poses_path     = sys.argv[1] if len(sys.argv) > 1 else 'logs/poses.csv'
