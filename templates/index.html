@@ -1080,11 +1080,19 @@ header {
       <details style="margin-bottom:24px;background:var(--navy-light);border:1px solid var(--border);border-radius:8px;padding:16px 20px" open>
         <summary style="cursor:pointer;font-weight:600;color:var(--navy);font-size:14px">💡 Comment bien écrire votre description</summary>
         <div style="margin-top:14px;font-size:13px;color:var(--text2);line-height:1.7">
-          <p style="margin-bottom:0">
+          <p style="margin-bottom:10px">
             <strong style="color:var(--text)">Comportement conditionnel</strong> — un agent peut réagir différemment
             selon une variable, avec une ligne par cas :<br>
             <code style="display:block;background:#fff;border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:12px;white-space:pre-wrap">si commande = cercle : va vers agent 1 et encercle-le
 si commande = veille : ne rien faire</code>
+          </p>
+
+          <p style="margin-bottom:0">
+            <strong style="color:var(--text)">Comportement selon la distance</strong> — reconnu directement, ça
+            correspond à ce que "éviter"/"encercler" savent déjà faire (approche au loin, réaction une fois
+            proche) :<br>
+            <code style="display:block;background:#fff;border:1px solid var(--border);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:12px;white-space:pre-wrap">si distance(agent1) > 100 m : rejoindre l'agent 1
+si distance(agent1) ≤ 100 m : tourner autour de l'agent 1</code>
           </p>
         </div>
       </details>

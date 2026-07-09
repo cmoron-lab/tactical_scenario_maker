@@ -409,6 +409,32 @@ def orbiter_m(state, agent, target):
     return [('aller_a', agent, next_pos)]
 
 
+# How far along the threat→protégé segment to stand: 0.5 = exact midpoint.
+INTERPOSE_FRACTION = 0.5
+
+
+def interposer_m(state, agent, threat, protege):
+    """
+    Positions `agent` on the straight line between `threat` and `protege`'s
+    CURRENT positions, at INTERPOSE_FRACTION of the way from protégé to
+    threat (0.5 = the midpoint) — recomputed fresh each time either one
+    moves, same idempotency guard as the other movement leaves (no new
+    command once already at the right spot).
+    """
+    threat_pos = state.agents.get(threat, {}).get('pos')
+    protege_pos = state.agents.get(protege, {}).get('pos')
+    if threat_pos is None or protege_pos is None:
+        return False
+    pos = (
+        protege_pos['lat'] + (threat_pos['lat'] - protege_pos['lat']) * INTERPOSE_FRACTION,
+        protege_pos['lon'] + (threat_pos['lon'] - protege_pos['lon']) * INTERPOSE_FRACTION,
+    )
+    last = state.agents[agent].get('last_waypoint')
+    if last and in_zone({'lat': last[0], 'lon': last[1]}, {'lat': pos[0], 'lon': pos[1]}, MIN_MOVE_DEG):
+        return []
+    return [('aller_a', agent, pos)]
+
+
 # ── Déclarations GTpyhop ──────────────────────────────────────────────────────
 
 gtpyhop.declare_task_methods('aller_a_agent',       aller_a_agent_m)
@@ -416,5 +442,6 @@ gtpyhop.declare_task_methods('suivre',              suivre_m)
 gtpyhop.declare_task_methods('maintenir_contact',   maintenir_contact_m)
 gtpyhop.declare_task_methods('aller_a_position',    aller_a_position_m)
 gtpyhop.declare_task_methods('orbiter',             orbiter_m)
+gtpyhop.declare_task_methods('interposer',          interposer_m)
 
 load_kb()

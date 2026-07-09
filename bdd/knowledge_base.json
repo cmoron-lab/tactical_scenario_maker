@@ -10,7 +10,12 @@
     "__patrol__": "agent1",
     "agent2": "agent2",
     "agent_1": "agent_1",
-    "agent_2": "agent_2"
+    "agent_2": "agent_2",
+    "intruder": "intruder",
+    "Agent_1": "Agent_1",
+    "Agent_2": "Agent_2",
+    "Agent1": "Agent1",
+    "Agent2": "Agent2"
   },
   "tasks": {
     "veiller": {
@@ -239,10 +244,10 @@
       ]
     },
     "encercler": {
-      "label": "Encercler un autre agent (approche, puis tourne en cercle une fois assez proche)",
+      "label": "Encercler un autre agent (approche, puis orbite une fois assez proche)",
       "methods": [
         {
-          "name": "Assez proche \u2014 tourne en cercle",
+          "name": "Assez proche \u2014 orbite",
           "preconditions": [
             {
               "type": "distance_below",
@@ -276,21 +281,26 @@
         }
       ]
     },
-    "reagir_commande": {
-      "label": "R\u00e9agit selon \"commande\" (cercle\u2192encercler, rine\u2192eviter)",
+    "reagir_conditions": {
+      "label": "R\u00e9agit selon les conditions de la description",
       "methods": [
         {
-          "name": "reagir_commande_cercle",
+          "name": "reagir_conditions_m1",
           "preconditions": [
             {
               "type": "state_equals",
               "variable": "commande",
-              "value": "cercle"
+              "value": "attaquer"
+            },
+            {
+              "type": "distance_below",
+              "target": "__cible__",
+              "threshold": 0.0017966223499820337
             }
           ],
           "subtasks": [
             {
-              "task": "encercler",
+              "task": "suivre_agent",
               "args": [
                 "__self__"
               ]
@@ -298,12 +308,12 @@
           ]
         },
         {
-          "name": "reagir_commande_rine",
+          "name": "reagir_conditions_m2",
           "preconditions": [
             {
-              "type": "state_equals",
-              "variable": "commande",
-              "value": "rine"
+              "type": "distance_below",
+              "target": "__cible__",
+              "threshold": 0.0017966223499820337
             }
           ],
           "subtasks": [
@@ -311,6 +321,25 @@
               "task": "eviter",
               "args": [
                 "__self__"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "reagir_conditions_m3",
+          "preconditions": [
+            {
+              "type": "distance_above",
+              "target": "__cible__",
+              "threshold": 0.0017966223499820337
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "aller_a_agent",
+              "args": [
+                "__self__",
+                "__cible__"
               ]
             }
           ]
@@ -350,6 +379,14 @@
     "orbiter": {
       "label": "Tourner en cercle autour d'un agent",
       "args": [
+        "agent",
+        "agent"
+      ]
+    },
+    "interposer": {
+      "label": "Se placer entre deux agents (interposition)",
+      "args": [
+        "agent",
         "agent",
         "agent"
       ]
