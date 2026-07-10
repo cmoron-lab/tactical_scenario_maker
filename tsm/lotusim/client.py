@@ -50,6 +50,7 @@ class LotusimClient:
 
     def _cb(self, msg: Any) -> None:
         poses: list[tuple[str, float, float]] = []
+        cb = self._on_pose
         with self._lock:
             for v in msg.vessels:
                 new = {'lat': v.geo_point.latitude, 'lon': v.geo_point.longitude}
@@ -60,15 +61,16 @@ class LotusimClient:
                     or abs(old['lon'] - new['lon']) > POSITION_EPSILON_DEG
                 )
                 self._data[v.vessel_name] = new
-                if self._on_pose:
+                if cb:
                     poses.append((v.vessel_name, new['lat'], new['lon']))
                 if changed:
                     for ev in self._watchers.get(v.vessel_name, []):
                         ev.set()
         # Callback utilisateur hors verrou : évite le self-deadlock si le
         # callback relit get_pose/register_watch.
-        for name, lat, lon in poses:
-            self._on_pose(name, lat, lon)
+        if cb:
+            for name, lat, lon in poses:
+                cb(name, lat, lon)
 
     def get_pose(self, name: str) -> Optional[dict[str, float]]:
         with self._lock:

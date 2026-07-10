@@ -14,7 +14,8 @@ KB_PATH = Path(__file__).resolve().parents[2] / 'doctrine' / 'knowledge_base.jso
 
 def load() -> dict[str, Any]:
     with open(KB_PATH, encoding='utf-8') as f:
-        return json.load(f)
+        kb: dict[str, Any] = json.load(f)
+        return kb
 
 
 def save(kb: dict[str, Any]) -> None:

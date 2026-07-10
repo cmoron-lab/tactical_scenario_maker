@@ -53,13 +53,14 @@ L'IHM web officielle existe donc déjà, mais reste en développement : la carte
 
 ### 4.1 Composants
 
-- [`app.py`](../app.py) sert une SPA locale, édite les scénarios et la base HTN, calcule des plans à blanc et lance le runtime dans un sous-processus.
-- [`templates/index.html`](../templates/index.html) regroupe HTML, CSS et JavaScript pour l'éditeur de scénarios, l'éditeur HTN et le générateur IA.
-- [`bdd/knowledge_base.json`](../bdd/knowledge_base.json) contient les tâches composites, leurs méthodes et les tâches feuilles connues.
-- [`bdd/tasks_methods.py`](../bdd/tasks_methods.py) traduit dynamiquement cette base en méthodes GTPyhop et résout les références entre agents.
-- [`bdd/ai_scenario_generator.py`](../bdd/ai_scenario_generator.py) combine Ollama, règles déterministes, validation et enrichissement de la base HTN.
-- [`main.py`](../main.py) crée un nœud ROS, spawne les agents, observe leurs poses et exécute un thread de replanification par agent.
-- [`bdd/primitives_actions.py`](../bdd/primitives_actions.py) traduit `aller_a` en appel au service `/<world>/<agent>/waypoints`.
+- [`tsm/web`](../tsm/web/) sert la SPA locale et l'API (scénarios, doctrine, préview de plan, lancement d'un run en sous-processus).
+- [`templates/index.html`](../templates/index.html) reste l'UI locale monolithique, adaptée au schéma canonique (onglet IA masqué).
+- [`doctrine/knowledge_base.json`](../doctrine/knowledge_base.json) contient la doctrine HTN, possédée par `tsm/domain/doctrine.py`.
+- [`tsm/domain`](../tsm/domain/) porte le schéma canonique v1 des scénarios (`scenarios/*.json`) et la géométrie.
+- [`tsm/planning`](../tsm/planning/) confine GTPyhop derrière un `Planner` (domaine privé, verrou) et porte les méthodes HTN.
+- [`tsm/execution`](../tsm/execution/) exécute : actions/commands, boucle de replanification événementielle par agent, assemblage du runtime (`main.py` n'est plus qu'un shim).
+- [`tsm/lotusim`](../tsm/lotusim/) est l'unique frontière ROS (spawn, waypoints, poses) — la couture des futures autonomies (§7.6).
+- [`attic/`](../attic/) : générateur IA parqué en attente de réadaptation (voir §12, impact 2).
 
 ### 4.2 Flux actuel
 
@@ -116,6 +117,8 @@ Le système manipule aujourd'hui au moins trois représentations d'un scénario 
 - les modules Python `scenarios/*.py` contenant `AGENTS`.
 
 Il n'existe pas encore de schéma canonique versionné. Par ailleurs, une génération IA peut modifier immédiatement la base HTN globale avant que le scénario soit importé, ce qui confond brouillon de scénario et évolution de la doctrine.
+
+**Mise à jour 2026-07 :** le schéma canonique v1 (JSON versionné, `scenarios/*.json`) a remplacé les modules Python générés ; il reste deux représentations (schéma canonique, sortie du générateur IA parqué) au lieu de trois.
 
 ### 5.6 Plusieurs composants dupliquent des responsabilités
 
@@ -336,6 +339,8 @@ Les événements d'environnement sont exprimés par le scénario, mais appliqué
 
 Le modèle d'événements d'OpenSCENARIO (voir [§16](#16-standards-et-systèmes-de-référence)) suggère d'aller au-delà du seul déclencheur temporel : des conditions sur l'état simulé (distance entre entités, entrée dans une zone, temps **simulé** — pas temps mur) qui arment des réactions. L'horloge de référence des événements devra être tranchée explicitement.
 
+Dans le pré-PoC refactoré, la mission du schéma v1 (« mission.task ») référence une tâche de la doctrine HTN — c'est assumé tant que la couche capacités (D3, §7.6) n'existe pas ; le vocabulaire scénario/doctrine/capacités sera séparé avec les manifestes.
+
 ### 8.4 Profil d'exécution
 
 Le profil choisit les implémentations sans modifier l'intention tactique. Le niveau de fidélité est porté par le manifeste de l'implémentation sélectionnée, puis résolu et enregistré avec le run ; il n'est pas déclaré une seconde fois dans le profil.
@@ -419,14 +424,14 @@ Le compromis est explicite, choisi avant le run et attaché aux résultats. La f
 
 Ces impacts sont des orientations, pas encore un plan d'implémentation validé :
 
-1. introduire un schéma canonique de scénario indépendant des modules Python ;
-2. séparer la doctrine de référence des tâches proposées par l'IA ;
+1. introduire un schéma canonique de scénario indépendant des modules Python — **fait** (schéma v1, 2026-07) ;
+2. séparer la doctrine de référence des tâches proposées par l'IA — la mutation implicite de la KB est neutralisée (générateur parqué), la séparation doctrine/brouillon reste à faire ;
 3. remplacer l'action immédiate `aller_a` par la soumission et le suivi d'un objectif long ;
 4. encapsuler le waypoint follower actuel comme une autonomie cinématique déclarant ses capacités ;
 5. encapsuler le pilote Focus V2 comme une autonomie dynamique spécifique ;
 6. déplacer ou intégrer l'expérience d'édition dans l'IHM officielle après audit de ses extensions ;
 7. confier le cycle de vie des runs à un orchestrateur unique, probablement basé sur `LOTUSim-generic-scenario` ;
-8. conserver GTPyhop derrière une frontière de domaine sans effets de bord d'import ni état global partagé entre threads.
+8. conserver GTPyhop derrière une frontière de domaine sans effets de bord d'import ni état global partagé entre threads — **fait** (tsm/planning/planner.py, 2026-07).
 
 ## 13. Stratégie de vérification
 
@@ -467,7 +472,7 @@ Chaque fournisseur d'autonomie doit démontrer qu'il :
 
 Les décisions suivantes n'ont pas encore été prises :
 
-1. Quel est le format canonique et versionné des scénarios, manifestes et profils d'exécution ?
+1. Quel est le format canonique et versionné des scénarios, manifestes et profils d'exécution ? *(tranché pour les scénarios : JSON v1 — manifestes et profils d'exécution restent ouverts)*
 2. Les objectifs utilisent-ils une action ROS générique avec payload validé, une action typée par famille de capacité, ou une combinaison des deux ? *(orientation : l'action typée par famille est le pattern ROS-natif éprouvé — voir §16)*
 3. Où vivent les manifestes et qui garantit leur compatibilité avec l'implémentation runtime ?
 4. Quelle granularité retenir pour l'ontologie initiale des capacités ? *(les taxonomies de tâches NETN-ETR et C2SIM servent de checklist gratuite — voir §16)*
@@ -476,7 +481,7 @@ Les décisions suivantes n'ont pas encore été prises :
 7. Quelle API LOTUSim doit appliquer les événements d'environnement comme les rotations de vent ?
 8. Quelles exigences minimales de fidélité un scénario peut-il déclarer sans se coupler à un profil d'exécution précis ?
 9. Comment gérer les objectifs concurrents, priorités et préemptions sur un même agent ?
-10. Quel sous-ensemble de cette architecture constitue le prochain incrément démontrable ?
+10. Quel sous-ensemble de cette architecture constitue le prochain incrément démontrable ? *(tranché et livré : réorganisation en couches + schéma canonique, voir docs/superpowers/specs/2026-07-10-tsm-refactor-design.md)*
 
 ## 15. Synthèse des décisions de la session
 

@@ -17,7 +17,7 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["tsm/vendor", "attic", "bdd", "gtpyhop.py", "visualize.py", "scenarios"]
+extend-exclude = ["tsm/vendor", "attic", "visualize.py", "scenarios"]
 
 [tool.mypy]
 files = ["tsm"]
@@ -36,3 +36,8 @@ check_untyped_defs = true
 no_implicit_optional = true
 warn_return_any = true
 strict_equality = true
+
+# ponytail: ports verbatim non annotés, strict à réévaluer si methods.py se stabilise
+[[tool.mypy.overrides]]
+module = "tsm.planning.methods"
+ignore_errors = true

@@ -54,12 +54,18 @@ def _check(cond, agent, state, tokens):
         return dist < threshold if t == 'distance_below' else dist > threshold
 
     # ── Legacy aliases needing cross-agent lookups (backwards compat) ─────
-    if t == 'drone_available':  return bool(ag.get('drone_available'))
-    if t == 'drone_absent':     return not bool(ag.get('drone_available'))
-    if t == 'weather_equals':   return ag.get('weather') == v
-    if t == 'intruder_nearby':  return bool(ag.get('intruder_nearby'))
-    if t == 'agent_present':    return bool(v) and v in state.agents and state.agents[v].get('available', True)
-    if t == 'agent_absent':     return bool(v) and v not in state.agents
+    if t == 'drone_available':
+        return bool(ag.get('drone_available'))
+    if t == 'drone_absent':
+        return not bool(ag.get('drone_available'))
+    if t == 'weather_equals':
+        return ag.get('weather') == v
+    if t == 'intruder_nearby':
+        return bool(ag.get('intruder_nearby'))
+    if t == 'agent_present':
+        return bool(v) and v in state.agents and state.agents[v].get('available', True)
+    if t == 'agent_absent':
+        return bool(v) and v not in state.agents
     return True
 
 

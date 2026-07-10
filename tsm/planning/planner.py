@@ -37,12 +37,14 @@ class Planner:
 
     def find_plan(self, state: Any, task: tuple[Any, ...]) -> Any:
         with _GTPYHOP_LOCK:
-            gtpyhop.current_domain = self._domain
+            domain: Any = self._domain  # current_domain n'est pas typé côté vendor
+            gtpyhop.current_domain = domain
             return gtpyhop.find_plan(state, [task])
 
     def reload_kb(self, kb: dict[str, Any]) -> None:
         with _GTPYHOP_LOCK:
-            gtpyhop.current_domain = self._domain
+            domain: Any = self._domain  # current_domain n'est pas typé côté vendor
+            gtpyhop.current_domain = domain
             methods.register_kb(kb)
 
     def run_commands(self, state: Any, plan: list[tuple[Any, ...]]) -> None:
@@ -61,7 +63,7 @@ class Planner:
 
 def build_state(scenario: Scenario) -> Any:
     """État GTPyhop initial — même construction pour la préview web et le runtime."""
-    state = gtpyhop.State('state')
+    state: Any = gtpyhop.State('state')  # State n'a pas d'attributs typés côté vendor
     state.agents = {}
     for name, spec in scenario.agents.items():
         agent: dict[str, Any] = {

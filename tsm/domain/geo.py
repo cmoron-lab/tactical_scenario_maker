@@ -18,7 +18,8 @@ def in_zone(a: dict[str, float], b: dict[str, float], radius: float) -> bool:
 def agent_conditions(agent: dict[str, Any]) -> dict[str, Any]:
     """Return an agent's precondition-relevant state — prefers 'conditions', falls back to legacy 'equipement'."""
     if 'conditions' in agent:
-        return agent['conditions']
+        conditions: dict[str, Any] = agent['conditions']
+        return conditions
     eq = agent.get('equipement', {})
     cond = {}
     if 'drone' in eq:
@@ -47,12 +48,16 @@ def check_condition(cond: dict[str, Any], ag: dict[str, Any]) -> bool | None:
         return str(cur) == str(v)
 
     if t == 'state_below':
-        try:    return float(ag.get(var) or 0) < float(v or 0)
-        except (TypeError, ValueError): return False
+        try:
+            return float(ag.get(var) or 0) < float(v or 0)
+        except (TypeError, ValueError):
+            return False
 
     if t == 'state_above':
-        try:    return float(ag.get(var) or 0) > float(v or 0)
-        except (TypeError, ValueError): return False
+        try:
+            return float(ag.get(var) or 0) > float(v or 0)
+        except (TypeError, ValueError):
+            return False
 
     if t == 'state_present':
         return ag.get(var) not in (None, '', False)
