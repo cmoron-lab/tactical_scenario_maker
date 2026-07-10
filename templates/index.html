@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>Scenario Maker — Naval Group</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
 :root {
   --navy:       #002B60;
@@ -21,6 +25,11 @@
   --green:      #1A7A48;
   --shadow:     0 1px 4px rgba(0,43,96,0.10);
   --shadow-md:  0 4px 16px rgba(0,43,96,0.12);
+  --status-running:  #22C55E;
+  --status-finished: #3B82F6;
+  --status-failed:   #EF4444;
+  --status-idle:     #64748B;
+  --status-warning:  #F59E0B;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -986,6 +995,161 @@ header {
   max-width: 320px;
 }
 #toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Run badge (header) ──────────────────────────────────────────────── */
+.run-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.run-badge:hover { background: rgba(255,255,255,0.16); }
+
+.run-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-idle); flex-shrink: 0; }
+.run-dot.pulse { animation: run-pulse 1.4s ease-in-out infinite; }
+@keyframes run-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  50%      { box-shadow: 0 0 0 5px rgba(34,197,94,0); }
+}
+
+/* ── Onglet Exécution ────────────────────────────────────────────────── */
+#tab-execution {
+  padding: 28px 32px;
+  overflow-y: auto;
+  max-height: calc(100vh - 56px - 41px);
+}
+
+.exec-grid {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 900px) { .exec-grid { grid-template-columns: 1fr; } }
+
+.exec-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.exec-card-hd {
+  padding: 12px 20px;
+  background: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.3px;
+}
+.exec-card-body { padding: 16px 20px; }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.status-badge.idle     { background: rgba(100,116,139,0.12); color: var(--status-idle); }
+.status-badge.running  { background: rgba(34,197,94,0.14);   color: var(--status-running); }
+.status-badge.stopping { background: rgba(245,158,11,0.16);  color: var(--status-warning); }
+.status-badge.finished { background: rgba(59,130,246,0.14);  color: var(--status-finished); }
+.status-badge.failed   { background: rgba(239,68,68,0.14);   color: var(--status-failed); }
+
+.exec-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.exec-info-row:last-child { border-bottom: none; }
+.exec-info-label { color: var(--text2); }
+.exec-info-val { color: var(--text); font-weight: 600; }
+
+.btn-stop { background: var(--status-failed); color: #fff; margin-top: 14px; }
+.btn-stop:hover { background: #DC2626; }
+
+.exec-empty { color: var(--text3); font-size: 13px; }
+
+.exec-footer-link { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; }
+.exec-footer-link a { color: var(--text3); text-decoration: none; }
+.exec-footer-link a:hover { color: var(--blue); }
+
+.exec-events { max-height: 55vh; overflow-y: auto; }
+.exec-events-empty { padding: 20px; color: var(--text3); font-size: 13px; text-align: center; }
+
+.evt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.evt-row:last-child { border-bottom: none; }
+.evt-icon { flex-shrink: 0; width: 16px; text-align: center; color: var(--text2); }
+.evt-body { flex: 1; min-width: 0; color: var(--text); word-break: break-word; }
+.evt-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.evt-time { flex-shrink: 0; color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.exec-map-wrap { position: relative; height: 65vh; }
+#exec-map { width: 100%; height: 100%; }
+.exec-map-refit {
+  position: absolute; top: 10px; right: 10px; z-index: 500;
+  width: 34px; height: 34px;
+  background: #fff; border: 1.5px solid var(--border-hi); border-radius: 6px;
+  box-shadow: var(--shadow);
+  font-size: 16px; color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.1s, border-color 0.1s;
+}
+.exec-map-refit:hover { color: var(--blue); border-color: var(--blue); }
+.exec-map-refit.active { color: #fff; background: var(--blue); border-color: var(--blue); }
+
+.leaflet-tooltip.exec-map-tooltip {
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  box-shadow: none;
+}
+.exec-wp-icon {
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 14px;
+}
 </style>
 </head>
 <body>
@@ -997,11 +1161,16 @@ header {
   </div>
   <div class="header-divider"></div>
   <span class="header-app">Tactical Scenario Maker</span>
+  <button class="run-badge" id="run-badge" onclick="switchTab('execution')" title="Voir l'exécution">
+    <span class="run-dot" id="run-dot"></span>
+    <span id="run-label">Aucun run</span>
+  </button>
 </header>
 
 <nav class="tabs-nav">
   <button class="tab-btn active" data-tab="scenarios" onclick="switchTab('scenarios')">Scénarios</button>
   <button class="tab-btn"        data-tab="kb"        onclick="switchTab('kb')">Connaissances HTN</button>
+  <button class="tab-btn"        data-tab="execution" onclick="switchTab('execution')">Exécution</button>
 </nav>
 
 <!-- ── Tab: Scénarios ─────────────────────────────────────────────────── -->
@@ -1179,6 +1348,36 @@ si distance(agent1) ≤ 100 m : tourner autour de l'agent 1</code>
   </div>
 </div>
 
+<!-- ── Tab: Exécution ────────────────────────────────────────────────── -->
+<div id="tab-execution" style="display:none">
+  <div class="exec-grid">
+
+    <div class="exec-col-left">
+      <div class="exec-card">
+        <div class="exec-card-hd">Contrôle</div>
+        <div class="exec-card-body" id="exec-control"></div>
+      </div>
+      <div class="exec-card">
+        <div class="exec-card-hd">Événements</div>
+        <div class="exec-events" id="exec-events">
+          <div class="exec-events-empty">Les événements du run apparaîtront ici.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="exec-col-right">
+      <div class="exec-card">
+        <div class="exec-card-hd">Carte live</div>
+        <div class="exec-map-wrap">
+          <div id="exec-map"></div>
+          <button class="exec-map-refit" id="exec-map-refit" onclick="reenableAutoFit()" title="Recentrer sur les agents">⌖</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1268,12 +1467,302 @@ function switchTab(tab) {
   document.getElementById('tab-scenarios').style.display = tab === 'scenarios' ? '' : 'none';
   document.getElementById('tab-kb').style.display        = tab === 'kb'        ? '' : 'none';
   document.getElementById('tab-ia').style.display        = tab === 'ia'        ? '' : 'none';
+  document.getElementById('tab-execution').style.display = tab === 'execution' ? '' : 'none';
+  execTabActive = (tab === 'execution');
   if (tab === 'kb' && !kbTabRendered) {
     // Only auto-fetch the first time this tab is opened in the session — refetching on
     // every switch would silently discard any unsaved edit (delete a task, switch away,
     // come back: it'd reappear). Use the "🔄 Rafraîchir" button for a deliberate reload.
     loadKB();
   }
+  if (tab === 'execution') {
+    // Leaflet can't measure a display:none container — init lazily on first
+    // display, and invalidateSize() on every switch-back (layout may have
+    // changed while hidden).
+    ensureMapInit();
+    renderExecControl();
+    renderExecEvents();
+    pollTick();
+    setTimeout(() => map && map.invalidateSize(), 0);
+  }
+}
+
+// ── Run polling & onglet Exécution ──────────────────────────────────────────────
+// Single polling loop (1s) started at page load. /api/run is always polled;
+// events/poses are only pulled when relevant (see pollTick) to avoid hammering
+// the server while nobody is watching.
+let runStatus = { state: 'idle', scenario: null, pid: null, started_at: null, returncode: null, stop_requested: false };
+let lastStartedAt = null;   // detects a NEW run (backend truncates events.jsonl on launch)
+let runEvents = [];
+let runEventsCursor = 0;
+let execTabActive = false;
+
+function markPollingUnknown() {
+  const dot = document.getElementById('run-dot');
+  const label = document.getElementById('run-label');
+  if (dot) { dot.style.background = 'var(--status-idle)'; dot.classList.remove('pulse'); }
+  if (label) label.textContent = '?';
+}
+
+function pollTick() {
+  fetch('/api/run').then(r => r.json()).then(s => {
+    if (s.started_at && s.started_at !== lastStartedAt) {
+      // New run detected (file truncated server-side, next event index restarts
+      // at 0) — the client-side accumulator must restart too, not just its cursor.
+      runEvents = [];
+      runEventsCursor = 0;
+      lastStartedAt = s.started_at;
+      autoFit = true;
+      updateRefitBtn();
+      renderExecEvents();
+    }
+    runStatus = s;
+    updateRunBadge();
+    updateLaunchButtonState();
+    renderExecControl();
+    if (s.state === 'running' || execTabActive) fetchRunEvents();
+    if (execTabActive) fetchRunPoses();
+  }).catch(() => markPollingUnknown());
+}
+setInterval(pollTick, 1000);
+pollTick();
+
+function fetchRunEvents() {
+  fetch(`/api/run/events?since=${runEventsCursor}`).then(r => r.json()).then(d => {
+    if (d.events && d.events.length) runEvents.push(...d.events);
+    runEventsCursor = d.next;
+    renderExecEvents();
+  }).catch(() => markPollingUnknown());
+}
+
+function fetchRunPoses() {
+  fetch('/api/run/poses').then(r => r.json()).then(d => {
+    if (execTabActive) renderMap(d.agents || {});
+  }).catch(() => markPollingUnknown());
+}
+
+function updateRunBadge() {
+  const dot = document.getElementById('run-dot');
+  const label = document.getElementById('run-label');
+  if (!dot || !label) return;
+  const s = runStatus;
+  dot.classList.remove('pulse');
+  if (s.state === 'running' && s.stop_requested) {
+    dot.style.background = 'var(--status-warning)';
+    label.textContent = 'Arrêt en cours…';
+  } else if (s.state === 'running') {
+    dot.style.background = 'var(--status-running)';
+    dot.classList.add('pulse');
+    label.textContent = `Run : ${s.scenario} · ${formatElapsed()}`;
+  } else if (s.state === 'finished') {
+    dot.style.background = 'var(--status-finished)';
+    label.textContent = `Terminé : ${s.scenario}`;
+  } else if (s.state === 'failed') {
+    dot.style.background = 'var(--status-failed)';
+    label.textContent = `Échec : ${s.scenario}`;
+  } else {
+    dot.style.background = 'var(--status-idle)';
+    label.textContent = 'Aucun run';
+  }
+}
+
+function updateLaunchButtonState() {
+  const btn = document.querySelector('.btn-launch');
+  if (!btn) return;
+  btn.disabled = runStatus.state === 'running';
+  btn.title = runStatus.state === 'running' ? 'Un run est déjà en cours' : '';
+}
+
+function formatElapsed() {
+  if (!runStatus.started_at) return '—';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(runStatus.started_at).getTime()) / 1000));
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function execFooterLink() {
+  const url = localStorage.getItem('lotusim_ui_url') || 'http://localhost:5173';
+  return `<div class="exec-footer-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Ouvrir l'IHM LOTUSim ↗</a></div>`;
+}
+
+function renderExecControl() {
+  const el = document.getElementById('exec-control');
+  if (!el) return;
+  const s = runStatus;
+  if (s.state === 'idle') {
+    el.innerHTML = `
+      <p class="exec-empty">Aucun run en cours — lancez un scénario depuis l'onglet Scénarios.</p>
+      ${execFooterLink()}`;
+    return;
+  }
+  const badgeCls = s.state === 'running' && s.stop_requested ? 'stopping' : s.state;
+  const badgeLabel = { running: s.stop_requested ? 'Arrêt en cours' : 'En cours',
+                        finished: 'Terminé', failed: 'Échec' }[s.state] || s.state;
+  const startedLocal = s.started_at ? new Date(s.started_at).toLocaleTimeString() : '—';
+  el.innerHTML = `
+    <div class="exec-info-row"><span class="exec-info-label">Scénario</span><span class="exec-info-val">${escHtml(s.scenario || '—')}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">État</span><span class="status-badge ${badgeCls}">${badgeLabel}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">PID</span><span class="exec-info-val">${s.pid ?? '—'}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">Démarré à</span><span class="exec-info-val">${startedLocal}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">Durée</span><span class="exec-info-val">${formatElapsed()}</span></div>
+    ${s.state === 'running' ? '<button class="btn btn-stop btn-full" onclick="stopRun()">■ Arrêter le run</button>' : ''}
+    ${execFooterLink()}`;
+}
+
+function stopRun() {
+  if (!confirm('Arrêter le run en cours ?')) return;
+  fetch('/api/run/stop', { method: 'POST' })
+    .then(() => pollTick())
+    .catch(() => toast('Erreur réseau — l\'arrêt a peut-être échoué'));
+}
+
+// ── Timeline d'événements ────────────────────────────────────────────────────
+const EVT_ICONS = { run_start: '▶', plan_preview: '✎', spawn: '⚓', spawn_error: '⚠', plan: '⇄', run_end: '■' };
+
+// Palette stable par agent — même fonction (djb2) utilisée par la timeline et
+// la mini-carte, pour que le chip d'un agent et son marker partagent la couleur.
+const AGENT_PALETTE = ['#0EA5E9', '#EC4899', '#16A34A', '#D97706', '#8B5CF6', '#EA580C', '#0D9488', '#DC2626'];
+function agentColor(name) {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+  return AGENT_PALETTE[h % AGENT_PALETTE.length];
+}
+
+function formatEventText(evt) {
+  switch (evt.kind) {
+    case 'run_start':   return `Run démarré : ${escHtml(evt.scenario)} (agents : ${(evt.agents || []).map(escHtml).join(', ')})`;
+    case 'plan_preview': return `${escHtml(evt.agent)} · plan prévu : ${escHtml(evt.plan)}`;
+    case 'spawn':        return `${escHtml(evt.agent)} · apparu dans la simulation`;
+    case 'spawn_error':  return `${escHtml(evt.agent)} · échec du spawn : ${escHtml(evt.error)}`;
+    case 'plan':
+      if (evt.note === 'inactif') return `${escHtml(evt.agent)} · plan vide (inactif)`;
+      return `${escHtml(evt.agent)} · nouveau plan : ${(evt.plan || []).map(escHtml).join(' → ')}`;
+    case 'run_end':      return 'Run terminé';
+    default:              return escHtml(evt.kind);
+  }
+}
+
+function buildEventRow(evt) {
+  const icon = EVT_ICONS[evt.kind] || '•';
+  const time = evt.t ? new Date(evt.t).toLocaleTimeString() : '';
+  const chip = evt.agent ? `<span class="evt-chip" style="background:${agentColor(evt.agent)}">${escHtml(evt.agent)}</span>` : '';
+  return `
+    <div class="evt-row">
+      <span class="evt-icon">${icon}</span>
+      <span class="evt-body">${chip}${formatEventText(evt)}</span>
+      <span class="evt-time">${time}</span>
+    </div>`;
+}
+
+// Auto-suit le bas SAUF si l'utilisateur a remonté manuellement — se réactive
+// dès qu'il redescend en bas (seuil de tolérance 24px).
+let eventsStickBottom = true;
+document.getElementById('exec-events').addEventListener('scroll', function() {
+  eventsStickBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 24;
+});
+
+function renderExecEvents() {
+  const el = document.getElementById('exec-events');
+  if (!el) return;
+  if (!runEvents.length) {
+    el.innerHTML = '<div class="exec-events-empty">Les événements du run apparaîtront ici.</div>';
+    return;
+  }
+  el.innerHTML = runEvents.map(buildEventRow).join('');
+  if (eventsStickBottom) el.scrollTop = el.scrollHeight;
+}
+
+// ── Mini-carte live (Leaflet) ────────────────────────────────────────────────
+let map = null;
+let mapLayers = {};       // agent name → { marker, trail, wpMarkerObj, wpLine }
+let autoFit = true;       // suit automatiquement les agents tant que l'utilisateur n'a pas navigué
+let programmaticMove = false;  // distingue un fitBounds() du code d'un zoom/pan utilisateur
+
+function ensureMapInit() {
+  if (map) return;
+  const container = document.getElementById('exec-map');
+  if (!container) return;
+  map = L.map(container).setView([1.2605, 103.7516], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22, maxNativeZoom: 19,
+    attribution: '© OpenStreetMap',
+  }).addTo(map);
+  map.on('zoomstart dragstart', () => {
+    if (programmaticMove) return;
+    autoFit = false;
+    updateRefitBtn();
+  });
+}
+
+function updateRefitBtn() {
+  const btn = document.getElementById('exec-map-refit');
+  if (btn) btn.classList.toggle('active', !autoFit);
+}
+
+function reenableAutoFit() {
+  autoFit = true;
+  updateRefitBtn();
+  fitMapToData();
+}
+
+function fitMapToData() {
+  if (!map) return;
+  const pts = [];
+  for (const layer of Object.values(mapLayers)) {
+    pts.push(layer.marker.getLatLng());
+    if (layer.wpMarkerObj) pts.push(layer.wpMarkerObj.getLatLng());
+  }
+  if (!pts.length) return;
+  programmaticMove = true;
+  map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 18 });
+  programmaticMove = false;
+}
+
+function renderMap(agents) {
+  ensureMapInit();
+  if (!map) return;
+  const seen = new Set();
+  for (const [name, a] of Object.entries(agents)) {
+    seen.add(name);
+    const color = agentColor(name);
+    let layer = mapLayers[name];
+    if (!layer) {
+      const marker = L.circleMarker([a.lat, a.lon], {
+        radius: 7, fillColor: color, fillOpacity: 0.9, color: '#fff', weight: 2,
+      }).addTo(map);
+      marker.bindTooltip(name, { permanent: true, direction: 'right', offset: [10, 0], className: 'exec-map-tooltip' });
+      const trail = L.polyline([], { color, weight: 2, opacity: 0.65 }).addTo(map);
+      layer = mapLayers[name] = { marker, trail, wpMarkerObj: null, wpLine: null };
+    }
+    layer.marker.setLatLng([a.lat, a.lon]);
+    layer.trail.setLatLngs(a.trail || []);
+    if (a.waypoint) {
+      if (!layer.wpMarkerObj) {
+        const icon = L.divIcon({ className: 'exec-wp-icon', html: '✕', iconSize: [14, 14] });
+        layer.wpMarkerObj = L.marker(a.waypoint, { icon, interactive: false }).addTo(map);
+        layer.wpLine = L.polyline([[a.lat, a.lon], a.waypoint], { color, weight: 1.5, opacity: 0.4, dashArray: '4 6' }).addTo(map);
+      } else {
+        layer.wpMarkerObj.setLatLng(a.waypoint);
+        layer.wpLine.setLatLngs([[a.lat, a.lon], a.waypoint]);
+      }
+    } else if (layer.wpMarkerObj) {
+      map.removeLayer(layer.wpMarkerObj);
+      map.removeLayer(layer.wpLine);
+      layer.wpMarkerObj = null;
+      layer.wpLine = null;
+    }
+  }
+  // Agents disparus du payload (run terminé, poses.csv tronqué…) → couches retirées.
+  for (const name of Object.keys(mapLayers)) {
+    if (seen.has(name)) continue;
+    const layer = mapLayers[name];
+    map.removeLayer(layer.marker);
+    map.removeLayer(layer.trail);
+    if (layer.wpMarkerObj) { map.removeLayer(layer.wpMarkerObj); map.removeLayer(layer.wpLine); }
+    delete mapLayers[name];
+  }
+  if (autoFit) fitMapToData();
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -1341,6 +1830,7 @@ function renderEditor(name, agents, isNew) {
   // Once per batch, after every card in this scenario is attached — not per-card,
   // since a dependency dropdown (e.g. "Agent «drone»") needs to see ALL of them.
   refreshAllMissionDeps();
+  updateLaunchButtonState();  // le launch fraîchement rendu doit refléter l'état courant, sans attendre le prochain tick
 }
 
 function buildCard(name, a = {}) {
@@ -1704,13 +2194,24 @@ function launchScenario(name) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Lancement…'; }
 
   fetch(`/api/scenario/${name}/launch`, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
+    .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, data: d })))
+    .then(({ ok, status, data }) => {
+      if (btn) btn.textContent = '▶ Lancer sur Lotusim';
+      if (!ok) {
+        if (statusEl) statusEl.innerHTML = status === 409
+          ? `<div class="launch-status error">Run déjà en cours (${escHtml(data.scenario || '')}) — arrêtez-le d'abord.</div>`
+          : `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
+        if (btn) btn.disabled = false;
+        return;
+      }
       if (statusEl) statusEl.innerHTML = `
         <div class="launch-status running">
-          ● main.py lancé — scénario : <strong>${name}</strong> · PID ${d.pid}
+          ● main.py lancé — scénario : <strong>${name}</strong> · PID ${data.pid}
         </div>`;
-      if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
+      // Un run est désormais en cours : le bouton reste grisé (updateLaunchButtonState
+      // le confirmera au prochain tick) et on bascule sur la vue qui le montre.
+      switchTab('execution');
+      pollTick();
     })
     .catch(() => {
       if (statusEl) statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
