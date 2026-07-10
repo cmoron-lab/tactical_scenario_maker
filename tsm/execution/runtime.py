@@ -24,9 +24,11 @@ def main(scenario_name: str) -> None:
     kb = doctrine.load()
 
     rclpy.init()
-    logs = RunLogs()
-    client = LotusimClient(on_pose=logs.log_pose)
+    logs = None
+    client = None
     try:
+        logs = RunLogs()
+        client = LotusimClient(on_pose=logs.log_pose)
         planner = Planner(kb, actions=(aller_a, creation_agent),
                           commands=make_commands(client, logs))
         state = build_state(scenario)
@@ -65,6 +67,8 @@ def main(scenario_name: str) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        logs.close()
-        client.shutdown()
+        if logs:
+            logs.close()
+        if client:
+            client.shutdown()
         rclpy.shutdown()
