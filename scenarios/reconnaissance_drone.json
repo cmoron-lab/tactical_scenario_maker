@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "agents": {
+    "veilleur": {
+      "position": {
+        "lat": 1.26,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          5.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "drone_available": true,
+        "base_location": "1.260 103.750",
+        "drone": "drone1",
+        "cible": "cible"
+      },
+      "mission": {
+        "task": "reconnaissance",
+        "args": [
+          "veilleur"
+        ]
+      }
+    },
+    "drone1": {
+      "position": {
+        "lat": 1.2605,
+        "lon": 103.7505
+      },
+      "heading_deg": 0.0,
+      "model": "x500",
+      "velocity": {
+        "linear": [
+          0.0,
+          8.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "base_location": "1.2605 103.7505",
+        "cible": "cible"
+      },
+      "mission": {
+        "task": "suivre_agent",
+        "args": [
+          "drone1"
+        ]
+      }
+    },
+    "cible": {
+      "position": {
+        "lat": 1.28,
+        "lon": 103.775
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          5.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {},
+      "mission": {
+        "task": "veiller",
+        "args": [
+          "cible"
+        ]
+      }
+    }
+  }
+}

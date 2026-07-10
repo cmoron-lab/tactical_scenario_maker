@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "agents": {
+    "agent1": {
+      "position": {
+        "lat": 1.245,
+        "lon": 103.735
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          5.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "base_location": "1.245 103.735",
+        "cible": "agent2"
+      },
+      "mission": {
+        "task": "eviter",
+        "args": [
+          "agent1"
+        ]
+      }
+    },
+    "agent2": {
+      "position": {
+        "lat": 1.26,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          5.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "base_location": "1.260 103.750",
+        "cible": "agent1"
+      },
+      "mission": {
+        "task": "eviter",
+        "args": [
+          "agent2"
+        ]
+      }
+    }
+  }
+}

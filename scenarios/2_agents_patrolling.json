@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "agents": {
+    "Agent1": {
+      "position": {
+        "lat": 1.26,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          3.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "patrol",
+        "base_location": "1.26 103.75"
+      },
+      "mission": {
+        "task": "veiller",
+        "args": [
+          "Agent1"
+        ]
+      }
+    },
+    "Agent2": {
+      "position": {
+        "lat": 1.265,
+        "lon": 103.745
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          3.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "patrol",
+        "base_location": "1.265 103.745",
+        "eviter_threshold": 0.0017966223499820337,
+        "cible": "Agent1",
+        "commande": "attaquer"
+      },
+      "mission": {
+        "task": "reagir_conditions",
+        "args": [
+          "Agent2"
+        ]
+      }
+    }
+  }
+}

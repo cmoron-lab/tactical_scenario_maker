@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "agents": {
+    "agent1": {
+      "position": {
+        "lat": 1.26,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          3.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "patrol",
+        "base_location": "1.26 103.75"
+      },
+      "mission": {
+        "task": "veiller",
+        "args": [
+          "agent1"
+        ]
+      }
+    },
+    "agent2": {
+      "position": {
+        "lat": 1.27,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          3.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "patrol",
+        "base_location": "1.27 103.75",
+        "cible": "agent1",
+        "encercler_threshold": 0.0009
+      },
+      "mission": {
+        "task": "encercler",
+        "args": [
+          "agent2"
+        ]
+      }
+    }
+  }
+}

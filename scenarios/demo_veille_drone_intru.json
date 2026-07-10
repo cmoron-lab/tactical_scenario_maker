@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "agents": {
+    "veilleur": {
+      "position": {
+        "lat": 1.26,
+        "lon": 103.75
+      },
+      "heading_deg": 0.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          5.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "patrol",
+        "base_location": "1.260 103.750"
+      },
+      "mission": {
+        "task": "veiller",
+        "args": [
+          "veilleur"
+        ]
+      }
+    },
+    "drone1": {
+      "position": {
+        "lat": 1.2603,
+        "lon": 103.7503
+      },
+      "heading_deg": 0.0,
+      "model": "x500",
+      "velocity": {
+        "linear": [
+          0.0,
+          8.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "drone",
+        "base_location": "1.2603 103.7503",
+        "cible": "intrus"
+      },
+      "mission": {
+        "task": "suivre_agent",
+        "args": [
+          "drone1"
+        ]
+      }
+    },
+    "intrus": {
+      "position": {
+        "lat": 1.266,
+        "lon": 103.756
+      },
+      "heading_deg": 45.0,
+      "model": "wamv",
+      "velocity": {
+        "linear": [
+          0.0,
+          4.0
+        ],
+        "angular_max": 0.05
+      },
+      "conditions": {
+        "role": "intruder",
+        "is_intruder": true,
+        "base_location": "1.266 103.756"
+      },
+      "mission": {
+        "task": "aller_a_position",
+        "args": [
+          "intrus",
+          [
+            1.28,
+            103.77
+          ]
+        ]
+      }
+    }
+  }
+}
