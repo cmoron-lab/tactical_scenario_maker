@@ -26,7 +26,7 @@ from bdd.utils import agent_conditions  # noqa: E402
 
 SCENARIOS_DIR = Path(__file__).parent / 'scenarios'
 TEMPLATE_PATH = Path(__file__).parent / 'templates' / 'index.html'
-KB_PATH = Path(__file__).parent / 'bdd' / 'knowledge_base.json'
+KB_PATH = Path(__file__).parent / 'doctrine' / 'knowledge_base.json'
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

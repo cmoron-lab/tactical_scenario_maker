@@ -5,7 +5,7 @@ from pathlib import Path
 import gtpyhop
 from bdd.utils import in_zone, MIN_MOVE_DEG, distance_deg, check_condition
 
-_KB_PATH = Path(__file__).parent / 'knowledge_base.json'
+_KB_PATH = Path(__file__).parent.parent / 'doctrine' / 'knowledge_base.json'
 
 
 # ── Préconditions ─────────────────────────────────────────────────────────────

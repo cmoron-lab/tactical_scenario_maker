@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-KB_PATH = Path(__file__).parent / "knowledge_base.json"
+KB_PATH = Path(__file__).parent.parent / "doctrine" / "knowledge_base.json"
 
 MAX_RETRIES = 1  # extra LLM calls allowed to self-correct an agent-count mismatch
 
