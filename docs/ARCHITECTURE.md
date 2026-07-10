@@ -33,12 +33,13 @@ En revanche, l'architecture proposée ne cherche pas à :
 
 ## 3. Carte de l'écosystème LOTUSim
 
-Les dépôts publics utiles se répartissent ainsi :
+Les dépôts publics utiles se répartissent ainsi. Ils sont les miroirs aval d'un GitLab privé Naval Group qui reste la source de vérité (officialisé par le `GOVERNANCE.md` de la PR naval-group/LOTUSim#36) : les contrats d'intégration peuvent donc évoluer par à-coups lors des synchronisations internes, comme le renommage `entity_manager_plugin` → `multi_agent_system_plugin`.
 
 | Projet | Responsabilité principale | Rapport au Scenario Maker |
 |---|---|---|
-| [`LOTUSim`](https://github.com/naval-group/LOTUSim) | Cœur Gazebo, gestion des entités, interfaces ROS, waypoint follower, interfaces de physique et de rendu | Fournit le monde simulé et les contrats d'intégration |
-| [`LOTUSim-generic-scenario`](https://github.com/naval-group/LOTUSim-generic-scenario) | Lancement du monde, gestion du cycle de vie des agents, XDyn, Unity et processus ROS | Candidat naturel pour posséder l'orchestration d'un run |
+| [`LOTUSim`](https://github.com/naval-group/LOTUSim) | Couche d'assemblage ROS 2 / Gazebo / XDyn : plugins gz (gestion des entités, waypoint follower, interfaces de physique et de rendu), interfaces ROS 2, bibliothèque de modèles et de mondes, binaires xdyn embarqués (`physics/`). Gazebo porte la boucle de simulation et le cycle de vie des entités ; la physique est déléguée à un moteur externe (`XDynWebSocket` ou `ROS2`), le rendu à Unity | Fournit le monde simulé, les plateformes disponibles (`assets/models/`) et les contrats d'intégration |
+| [Wiki `LOTUSim`](https://github.com/naval-group/LOTUSim/wiki) | Documentation de référence, git-clonable : conventions XDyn (repères NED, quaternions), bloc `<lotus_param>`, render plugin, caractéristiques des plateformes | Porte les contrats d'intégration réels que ce document invoque |
+| [`LOTUSim-generic-scenario`](https://github.com/naval-group/LOTUSim-generic-scenario) | Lancement du monde, cycle de vie des agents, processus XDyn/Unity/ROS, comportements par agent (un package ROS 2 par agent) et player Unity pré-compilé | Candidat naturel pour posséder l'orchestration d'un run ; ses packages d'agents sont les embryons des fournisseurs d'autonomie (§7.6) |
 | [`LOTUSim-Xdyn`](https://github.com/naval-group/LOTUSim-Xdyn) | Dynamique navale haute fidélité | Une implémentation possible du plant physique des plateformes navales |
 | [`LOTUSim-UI-frontend`](https://github.com/naval-group/LOTUSim-UI-frontend) | IHM React/Vite et carte Leaflet | Candidat naturel pour héberger l'éditeur tactique |
 | [`LOTUSim-UI-backend`](https://github.com/naval-group/LOTUSim-UI-backend) | Passerelle REST/WebSocket vers ROS 2 | Gateway existante entre navigateur et instances LOTUSim |
