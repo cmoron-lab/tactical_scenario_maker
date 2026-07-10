@@ -1,9 +1,6 @@
 """Handlers de l'API locale — parlent le schéma canonique, aucun import ROS."""
 from __future__ import annotations
 
-import subprocess
-import sys
-from pathlib import Path
 from typing import Any
 
 from tsm.domain import doctrine
@@ -11,13 +8,13 @@ from tsm.domain.scenario import (Scenario, delete_scenario, list_scenarios,
                                  load_scenario, save_scenario)
 from tsm.execution.actions import aller_a, creation_agent
 from tsm.planning.planner import Planner, build_state
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from tsm.web.runs import RunManager
 
 
 class Api:
-    def __init__(self) -> None:
+    def __init__(self, run_manager: RunManager | None = None) -> None:
         self._planner = Planner(doctrine.load(), actions=(aller_a, creation_agent))
+        self._runs = run_manager or RunManager()
 
     def scenarios(self) -> list[str]:
         return list_scenarios()
@@ -60,5 +57,17 @@ class Api:
 
     def launch(self, name: str) -> dict[str, Any]:
         load_scenario(name)  # refus propre (400) avant de lancer quoi que ce soit
-        proc = subprocess.Popen([sys.executable, 'main.py', name], cwd=REPO_ROOT)
-        return {'ok': True, 'pid': proc.pid}
+        pid = self._runs.launch(name)  # RunBusyError (409) si un run est déjà vivant
+        return {'ok': True, 'pid': pid}
+
+    def run_status(self) -> dict[str, Any]:
+        return self._runs.status()
+
+    def run_events(self, since: int) -> dict[str, Any]:
+        return self._runs.events_since(since)
+
+    def run_poses(self) -> dict[str, Any]:
+        return self._runs.poses()
+
+    def run_stop(self) -> dict[str, Any]:
+        return {'ok': self._runs.stop()}

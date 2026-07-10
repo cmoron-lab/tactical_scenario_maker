@@ -5,10 +5,11 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from tsm.domain.scenario import ScenarioError
 from tsm.web.api import Api
+from tsm.web.runs import RunBusyError
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[2] / 'templates' / 'index.html'
 
@@ -23,6 +24,12 @@ def _route(method: str, path: str):
             return 'list_scenarios', {}
         if parts == ['api', 'kb']:
             return 'get_kb', {}
+        if parts == ['api', 'run']:
+            return 'run_status', {}
+        if parts == ['api', 'run', 'events']:
+            return 'run_events', {}
+        if parts == ['api', 'run', 'poses']:
+            return 'run_poses', {}
         if len(parts) == 3 and parts[:2] == ['api', 'scenario']:
             return 'get_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'plan':
@@ -30,6 +37,8 @@ def _route(method: str, path: str):
     if method == 'POST':
         if parts == ['api', 'kb']:
             return 'save_kb', {}
+        if parts == ['api', 'run', 'stop']:
+            return 'run_stop', {}
         if len(parts) == 3 and parts[:2] == ['api', 'scenario']:
             return 'save_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'launch':
@@ -95,6 +104,19 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(self.api.delete_scenario(params['name']))
             elif action == 'launch_scenario':
                 self._send_json(self.api.launch(params['name']))
+            elif action == 'run_status':
+                self._send_json(self.api.run_status())
+            elif action == 'run_events':
+                query = parse_qs(urlparse(self.path).query)
+                try:
+                    since = int(query.get('since', ['0'])[0])
+                except ValueError:
+                    since = 0
+                self._send_json(self.api.run_events(since))
+            elif action == 'run_poses':
+                self._send_json(self.api.run_poses())
+            elif action == 'run_stop':
+                self._send_json(self.api.run_stop())
             elif action == 'generate_scenario':
                 self._send_json({'error': 'générateur IA parqué — voir attic/'}, 501)
             else:
@@ -104,6 +126,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({'error': str(e)}, 400)
             else:
                 self._send_json({'error': 'not found'}, 404)
+        except RunBusyError:
+            self._send_json({'error': 'run déjà en cours',
+                              'scenario': self.api.run_status()['scenario']}, 409)
 
     def do_GET(self):
         self._dispatch('GET')
@@ -119,8 +144,8 @@ class _Server(HTTPServer):
     allow_reuse_address = True
 
 
-def make_server(port: int = 8080) -> HTTPServer:
-    handler = type('Handler', (_Handler,), {'api': Api()})
+def make_server(port: int = 8080, api: Api | None = None) -> HTTPServer:
+    handler = type('Handler', (_Handler,), {'api': api or Api()})
     return _Server(('', port), handler)
 
 
