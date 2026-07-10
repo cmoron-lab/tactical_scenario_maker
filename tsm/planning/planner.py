@@ -2,9 +2,11 @@
 
 gtpyhop rebinde son current_domain global à chaque construction de Domain
 et toutes ses fonctions declare_*/find_plan opèrent dessus. Le Planner
-confine ça : chaque opération rebinde current_domain sous verrou, ce qui
-sérialise du même coup les replanifications concurrentes des threads
-agents (un find_plan dure quelques ms).
+confine ça : chaque opération rebinde current_domain sous un verrou
+partagé entre TOUTES les instances — current_domain est global au
+process, un verrou par instance ne protégerait rien — ce qui sérialise
+du même coup les replanifications concurrentes des threads agents
+(un find_plan dure quelques ms).
 """
 from __future__ import annotations
 
@@ -17,13 +19,13 @@ from tsm.planning import methods
 from tsm.vendor import gtpyhop
 
 _ids = itertools.count(1)
+_GTPYHOP_LOCK = threading.Lock()
 
 
 class Planner:
     def __init__(self, kb: dict[str, Any], actions: tuple[Any, ...] = (),
                  commands: tuple[Any, ...] = ()) -> None:
-        self._lock = threading.Lock()
-        with self._lock:
+        with _GTPYHOP_LOCK:
             self._domain = gtpyhop.Domain(f'tsm_{next(_ids)}')  # rebinde current_domain
             gtpyhop.verbose = 0
             if actions:
@@ -34,12 +36,12 @@ class Planner:
             methods.register_kb(kb)
 
     def find_plan(self, state: Any, task: tuple[Any, ...]) -> Any:
-        with self._lock:
+        with _GTPYHOP_LOCK:
             gtpyhop.current_domain = self._domain
             return gtpyhop.find_plan(state, [task])
 
     def reload_kb(self, kb: dict[str, Any]) -> None:
-        with self._lock:
+        with _GTPYHOP_LOCK:
             gtpyhop.current_domain = self._domain
             methods.register_kb(kb)
 
