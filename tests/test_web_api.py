@@ -20,8 +20,9 @@ def _post(conn, path, body=None):
     return r.status, json.loads(r.read())
 
 
-def test_api_end_to_end_sans_ros():
-    srv = make_server(port=0)
+def test_api_end_to_end_sans_ros(tmp_path):
+    # RunManager isolé : le défaut lit REPO_ROOT/logs, pollué par les vrais runs.
+    srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port = srv.server_address[1]
     conn = HTTPConnection('127.0.0.1', port)
