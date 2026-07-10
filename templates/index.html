@@ -1002,7 +1002,6 @@ header {
 <nav class="tabs-nav">
   <button class="tab-btn active" data-tab="scenarios" onclick="switchTab('scenarios')">Scénarios</button>
   <button class="tab-btn"        data-tab="kb"        onclick="switchTab('kb')">Connaissances HTN</button>
-  <button class="tab-btn"        data-tab="ia"        onclick="switchTab('ia')">🤖 IA</button>
 </nav>
 
 <!-- ── Tab: Scénarios ─────────────────────────────────────────────────── -->
@@ -1296,8 +1295,8 @@ function loadList() {
 
 function selectScenario(name) {
   current = name;
-  fetch(`/api/scenario/${name}`).then(r => r.json()).then(agents => {
-    renderEditor(name, agents, false);
+  fetch(`/api/scenario/${name}`).then(r => r.json()).then(doc => {
+    renderEditor(name, doc.agents, false);
     loadList();
   });
 }
@@ -1349,7 +1348,7 @@ function buildCard(name, a = {}) {
   div.className = 'agent-card';
   div.id = `ac-${name}`;
 
-  const parsed = parseMission(a.mission || '');
+  const parsed = parseMission(a.mission);
   const initConds = a.conditions || {};
 
   div.innerHTML = `
@@ -1361,12 +1360,12 @@ function buildCard(name, a = {}) {
     <div class="form-grid" data-agent="${name}">
       <div class="field">
         <label>Latitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~1.25–1.27)</span></label>
-        <input name="x" type="number" step="any" value="${a.x ?? ''}" placeholder="1.2605"
+        <input name="x" type="number" step="any" value="${a.position?.lat ?? ''}" placeholder="1.2605"
           oninput="warnCoord(this, 1.0, 2.0)">
       </div>
       <div class="field">
         <label>Longitude <span style="font-weight:400;color:var(--text3)">(zone Lotusim : ~103.7–103.8)</span></label>
-        <input name="y" type="number" step="any" value="${a.y ?? ''}" placeholder="103.7516"
+        <input name="y" type="number" step="any" value="${a.position?.lon ?? ''}" placeholder="103.7516"
           oninput="warnCoord(this, 103.0, 104.0)">
       </div>
       <div class="field">
@@ -1379,11 +1378,11 @@ function buildCard(name, a = {}) {
       </div>
       <div class="field">
         <label>Cap <span style="font-weight:400;color:var(--text3)">(°, 0°=Est)</span></label>
-        <input name="heading" type="number" step="any" value="${a.heading ?? 0}" placeholder="0">
+        <input name="heading" type="number" step="any" value="${a.heading_deg ?? 0}" placeholder="0">
       </div>
       <div class="field">
         <label>Vitesse linéaire [min max]</label>
-        <input name="vel" value="${a.vel_min ?? 0} ${a.vel_max ?? 5}">
+        <input name="vel" value="${a.velocity?.linear?.[0] ?? 0} ${a.velocity?.linear?.[1] ?? 5}">
       </div>
       <div class="field fw">
         <label>Mission</label>
@@ -1427,9 +1426,11 @@ function buildCard(name, a = {}) {
   return div;
 }
 
-function parseMission(str) {
-  const p = str.trim().split(/\s+/);
-  return { task: p[0] || 'veiller', extra: p.slice(2) };
+function parseMission(m) {
+  const args = (m && m.args) ? m.args.slice(1) : [];   // args[0] = l'agent lui-même
+  const flat = [];
+  for (const a of args) { if (Array.isArray(a)) flat.push(...a); else flat.push(a); }
+  return { task: (m && m.task) || 'veiller', extra: flat.map(String) };
 }
 
 function updateExtra(agentName, task, init = [], { skipDeps = false } = {}) {
@@ -1600,13 +1601,13 @@ function collectAgents() {
 
     const task = g('task');
     const type = getTaskMeta(task).extra ?? 'none';
-    let mission = `${task} ${aname}`;
+    const args = [aname];
     if (type === 'pos') {
       const lat = g('mission_lat'), lon = g('mission_lon');
-      if (lat && lon) mission += ` ${lat} ${lon}`;
+      if (lat && lon) args.push([Number(lat), Number(lon)]);
     } else if (type === 'target') {
       const t = g('mission_target');
-      if (t) mission += ` ${t}`;
+      if (t) args.push(t);
     }
 
     const conditions = collectConditions(div);
@@ -1619,15 +1620,12 @@ function collectAgents() {
     });
 
     data[aname] = {
-      x: parseFloat(g('x')) || 0,
-      y: parseFloat(g('y')) || 0,
+      position: { lat: parseFloat(g('x')) || 0, lon: parseFloat(g('y')) || 0 },
+      heading_deg: parseFloat(g('heading')) || 0,
       model: g('model') || 'wamv',
-      heading: parseFloat(g('heading')) || 0,
-      vel_min: isNaN(vm) ? 0 : vm,
-      vel_max: isNaN(vM) ? 5 : vM,
-      ang_vel: 0.05,
+      velocity: { linear: [isNaN(vm) ? 0 : vm, isNaN(vM) ? 5 : vM], angular_max: 0.05 },
       conditions,
-      mission: mission.trim(),
+      mission: { task, args },
     };
   });
   return data;
@@ -1663,13 +1661,13 @@ function saveScenario() {
   fetch(`/api/scenario/${scName}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(collectAgents()),
+    body: JSON.stringify({ version: 1, agents: collectAgents() }),
   }).then(() => {
     const wasNew = !current;
     current = scName;
     if (wasNew) {
-      fetch(`/api/scenario/${scName}`).then(r => r.json()).then(agents => {
-        renderEditor(scName, agents, false);
+      fetch(`/api/scenario/${scName}`).then(r => r.json()).then(doc => {
+        renderEditor(scName, doc.agents, false);
         loadList();
       });
     } else {
