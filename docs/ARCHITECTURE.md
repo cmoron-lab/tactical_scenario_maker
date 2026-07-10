@@ -155,6 +155,8 @@ soumis → accepté → en cours → réussi | échoué | annulé | timeout
 
 Le protocole technique exact reste à choisir. Le modèle sémantique, lui, ne doit pas assimiler « ordre transmis » à « objectif accompli ».
 
+Ce cycle de vie correspond exactement au protocole des actions ROS 2 — goal accepté ou refusé, feedback continu, résultat terminal, préemption incluse (voir [§16](#16-standards-et-systèmes-de-référence)). `NavigateToPose` de Nav2 en est la preuve d'existence à l'échelle.
+
 ### D6 — La simulation est multi-fidélité et la fidélité est choisie par agent
 
 Une même capacité peut être implémentée par plusieurs backends :
@@ -232,6 +234,8 @@ Responsabilités :
 - propager feedback, succès et erreurs vers le domaine tactique ;
 - appliquer les timeouts et annulations ;
 - empêcher l'exécution simultanée d'objectifs incompatibles pour un même agent.
+
+La pratique robotique établie (Nav2, PlanSys2, `scenario_runner` — voir [§16](#16-standards-et-systèmes-de-référence)) éclaire la frontière avec le domaine tactique : le planificateur s'engage sur un plan, l'exécutif surveille les objectifs longs, et la replanification n'est déclenchée que par un échec ou une invalidation explicite — pas en continu à chaque observation.
 
 ### 7.6 Fournisseur d'autonomie
 
@@ -329,6 +333,8 @@ events:
 ```
 
 Les événements d'environnement sont exprimés par le scénario, mais appliqués par le sous-système d'environnement compétent. Les autonomies les observent et y réagissent ; le Scenario Maker ne recalcule pas leur navigation.
+
+Le modèle d'événements d'OpenSCENARIO (voir [§16](#16-standards-et-systèmes-de-référence)) suggère d'aller au-delà du seul déclencheur temporel : des conditions sur l'état simulé (distance entre entités, entrée dans une zone, temps **simulé** — pas temps mur) qui arment des réactions. L'horloge de référence des événements devra être tranchée explicitement.
 
 ### 8.4 Profil d'exécution
 
@@ -462,9 +468,9 @@ Chaque fournisseur d'autonomie doit démontrer qu'il :
 Les décisions suivantes n'ont pas encore été prises :
 
 1. Quel est le format canonique et versionné des scénarios, manifestes et profils d'exécution ?
-2. Les objectifs utilisent-ils une action ROS générique avec payload validé, une action typée par famille de capacité, ou une combinaison des deux ?
+2. Les objectifs utilisent-ils une action ROS générique avec payload validé, une action typée par famille de capacité, ou une combinaison des deux ? *(orientation : l'action typée par famille est le pattern ROS-natif éprouvé — voir §16)*
 3. Où vivent les manifestes et qui garantit leur compatibilité avec l'implémentation runtime ?
-4. Quelle granularité retenir pour l'ontologie initiale des capacités ?
+4. Quelle granularité retenir pour l'ontologie initiale des capacités ? *(les taxonomies de tâches NETN-ETR et C2SIM servent de checklist gratuite — voir §16)*
 5. `LOTUSim-generic-scenario` devient-il l'unique orchestrateur des runs ?
 6. Le Scenario Maker devient-il un module de `LOTUSim-UI-frontend` ou reste-t-il une application séparée intégrée par API ?
 7. Quelle API LOTUSim doit appliquer les événements d'environnement comme les rotations de vent ?
@@ -486,5 +492,27 @@ Les décisions suivantes n'ont pas encore été prises :
 | Réutilisation d'un scénario | Scénario tactique séparé du profil d'exécution |
 | Dégradation de fidélité | Jamais automatique ni silencieuse |
 | Traçabilité | Profil et versions enregistrés avec chaque run |
+
+## 16. Standards et systèmes de référence
+
+L'architecture cible n'est pas une invention isolée : les écosystèmes M&S défense, robotique ROS et simulation de conduite autonome ont convergé indépendamment vers les mêmes frontières (scénario déclaratif / exécutif / autonomies à capacités déclarées / plant physique). Cette convergence valide la décomposition — et fournit des sémantiques, protocoles et codes éprouvés à réutiliser plutôt qu'à réinventer.
+
+**Principe d'usage : emprunter la sémantique et les patterns, pas les formats.** Les standards défense (XML lourds, outillage rare) seraient écrasants pour l'équipe actuelle ; leur valeur immédiate est de servir de vocabulaire de référence et de checklist. Leur valeur future est l'argument d'interopérabilité : une architecture dont les concepts se *mappent* sur C2SIM/HLA sera intégrable dans une fédération le jour où un client l'exigera.
+
+| Concept du document | Référence | Ce qu'on en retient |
+|---|---|---|
+| Cycle de vie des objectifs (D5, §7.5) | [Actions ROS 2](https://design.ros2.org/articles/actions.html) ; [Nav2](https://docs.nav2.org/) `NavigateToPose` | Le protocole goal/feedback/result existe déjà, préemption et refus inclus ; ne pas inventer le nôtre |
+| Exécutif de mission (§7.5) | [`scenario_runner`](https://github.com/carla-simulator/scenario_runner) (CARLA), [esmini](https://github.com/esmini/esmini) ; [BehaviorTree.CPP](https://github.com/BehaviorTree/BehaviorTree.CPP) ; [PlanSys2](https://github.com/PlanSys2/ros2_planning_system) | Moteur de conditions/déclencheurs évaluées contre l'état simulé ; le planificateur s'engage, l'exécutif surveille, replanification sur échec seulement |
+| Fournisseur d'autonomie et manifeste (D2–D4, §7.6) | [Open-RMF](https://github.com/open-rmf/rmf) *fleet adapters* ; STANAG 4586 (OTAN) | Un adaptateur par plateforme qui déclare ses capacités et accepte/refuse des tâches ; leçon 4586 : l'interface « générique » finit toujours percée de messages spécifiques — assumer la spécificité (§5.2) |
+| Scénario déclaratif, séparation logique/concret (D7, §8.3) | [ASAM OpenSCENARIO](https://www.asam.net/standards/detail/openscenario/) (XML et DSL 2.x) | Scénario *logique* paramétré vs scénario *concret* résolu = notre séparation scénario/profil d'exécution ; déclencheurs conditionnels riches plutôt que timeline pure |
+| État initial et ordres militaires (§8.3) | SISO MSDL (SISO-STD-007), C-BML (SISO-STD-011), C2SIM (SISO-STD-019) — [sisostds.org](https://www.sisostds.org/) ; [NETN-FOM](https://github.com/AMSP-04/NETN-FOM), module ETR (OTAN) | NETN-ETR définit précisément notre modèle : tâches (`MoveToLocation`, `FollowEntity`…) soumises à des entités simulées, avec rapports d'état et résultats ; taxonomies = checklist pour l'ontologie de capacités (Q4) |
+| Scénarios maritimes Gazebo (§7.7) | [VRX — Virtual RobotX](https://github.com/osrf/vrx) | Même stack, même modèle `wamv` ; plugins de scoring : le monde juge le succès d'une tâche, pas le pilote qui l'exécute |
+| Autonomie drone (§7.6) | [MAVLink mission protocol](https://mavlink.io/en/services/mission.html) / PX4 | Le protocole que parlera une autonomie drone réelle ; modèle waypoint accepted/current/reached éprouvé |
+
+Lectures de code recommandées avant le prochain incrément d'architecture : `scenario_runner` (l'exécutif de scénario le plus proche de notre besoin), Nav2 (le pattern serveur d'action + behavior tree), l'API de tâches d'Open-RMF (la découverte de capacités en pratique).
+
+Ce qui n'a **pas** de standard établi — notre part réellement singulière : la multi-fidélité par agent avec provenance (D6, D8, §9.4), les autonomies de plateforme elles-mêmes (le helmsman Focus V2 est du travail de contrôle, pas d'architecture), et l'orchestration multi-processus propre à la stack LOTUSim (Q5).
+
+---
 
 Ce document constitue la base de la prochaine étape de conception. Les questions ouvertes doivent être arbitrées avant de produire un plan de réarchitecture détaillé.
