@@ -1,4 +1,3 @@
-# tsm/domain/scenario.py
 """Schéma canonique des scénarios (v1) et accès fichiers.
 
 Un scénario est un document JSON {"version": 1, "agents": {...}} ; son
