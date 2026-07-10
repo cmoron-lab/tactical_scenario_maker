@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Post-implémentation (2026-07-10) :** plan exécuté intégralement (18 commits sur `refactor/tsm-layout`). Trois défauts DANS LE CODE DE CE PLAN ont été détectés par les reviews de tâches et corrigés — le code livré fait foi :
+> 1. **Task 7** — le verrou du Planner était par instance ; `gtpyhop.current_domain` étant global au process, deux Planners concurrents pouvaient se rebinder le domaine en plein `find_plan`. Livré : verrou partagé module-level `_GTPYHOP_LOCK` (commit `e7a78b1`).
+> 2. **Task 8** — `on_pose` était appelé sous le verrou du client : self-deadlock si le callback relit `get_pose`/`register_watch`. Livré : collecte sous verrou, notification hors verrou (commit `7a40b08`).
+> 3. **Task 9** — `RunLogs()`/`LotusimClient()` étaient construits hors du try/finally : un échec de construction sautait `rclpy.shutdown()`. Livré : constructions dans le try, finally gardé par None (commit `28b3bdd`).
+> S'ajoutent : un fix latent dans `methods._resolve` (garde `isinstance(str)` sur les args non-string, commit `d751586`) et l'exécution de T13 avec la procédure stash pour préserver des éditions utilisateur non commitées d'ARCHITECTURE.md.
+
 **Goal :** Réorganiser le POC en paquet `tsm/` par couches (domaine / planification / exécution / adaptateur LOTUSim / web) avec un schéma canonique JSON de scénarios — iso-fonctionnel.
 
 **Architecture :** Voir [le design](../specs/2026-07-10-tsm-refactor-design.md). Un paquet unique, une seule vraie frontière (`LotusimClient`), un `Planner` qui encapsule l'état global GTPyhop derrière un verrou, des scénarios en JSON versionné à la place des `.py` générés.
