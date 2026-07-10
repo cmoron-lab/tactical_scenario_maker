@@ -78,14 +78,16 @@ class RunManager:
             return False
         self._proc.send_signal(signal.SIGINT)
         self._stop_requested = True
-        timer = threading.Timer(STOP_TIMEOUT, self._kill_if_alive)
+        # timer lié à CE process : un relaunch dans la fenêtre ne doit pas être tué
+        timer = threading.Timer(STOP_TIMEOUT, self._kill_if_alive, args=(self._proc,))
         timer.daemon = True
         timer.start()
         return True
 
-    def _kill_if_alive(self) -> None:
-        if self._proc is not None and self._proc.poll() is None:
-            self._proc.kill()
+    @staticmethod
+    def _kill_if_alive(proc: subprocess.Popen[bytes]) -> None:
+        if proc.poll() is None:
+            proc.kill()
 
     def status(self) -> dict[str, Any]:
         if self._proc is None:
@@ -117,8 +119,18 @@ class RunManager:
         return {'events': events[since:], 'next': len(events)}
 
     def poses(self) -> dict[str, Any]:
-        self._consume_pose_file(self._logs_dir / 'poses.csv', is_waypoint=False)
-        self._consume_pose_file(self._logs_dir / 'waypoints.csv', is_waypoint=True)
+        pose_path = self._logs_dir / 'poses.csv'
+        wp_path = self._logs_dir / 'waypoints.csv'
+        # le runtime tronque LES DEUX fichiers au lancement d'un nouveau run :
+        # détecter la troncature sur l'un OU l'autre et purger UNE seule fois —
+        # une purge par fichier effacerait ce que le premier vient de lire
+        if ((pose_path.exists() and pose_path.stat().st_size < self._pose_offset)
+                or (wp_path.exists() and wp_path.stat().st_size < self._wp_offset)):
+            self._pose_offset = 0
+            self._wp_offset = 0
+            self._agents = {}
+        self._consume_pose_file(pose_path, is_waypoint=False)
+        self._consume_pose_file(wp_path, is_waypoint=True)
         return {'agents': {
             name: {'lat': a['lat'], 'lon': a['lon'], 't': a['t'],
                    'trail': [list(p) for p in a['trail']], 'waypoint': a['waypoint']}
@@ -130,9 +142,6 @@ class RunManager:
         if not path.exists():
             return
         offset = getattr(self, offset_attr)
-        if path.stat().st_size < offset:
-            offset = 0
-            self._agents = {}  # troncature (nouveau run) : état accumulé périmé
         with open(path, 'rb') as f:
             f.seek(offset)
             data = f.read()
