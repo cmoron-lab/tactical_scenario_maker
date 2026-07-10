@@ -29,6 +29,7 @@ def main(scenario_name: str) -> None:
     try:
         logs = RunLogs()
         client = LotusimClient(on_pose=logs.log_pose)
+        logs.log_event('run_start', scenario=scenario_name, agents=list(scenario.agents))
         planner = Planner(kb, actions=(aller_a, creation_agent),
                           commands=make_commands(client, logs))
         state = build_state(scenario)
@@ -37,14 +38,17 @@ def main(scenario_name: str) -> None:
         for name, spec in scenario.agents.items():
             plan = planner.find_plan(state, spec.mission.to_htn_task())
             client.log_info(f'[HTN] {name}: {plan}')
+            logs.log_event('plan_preview', agent=name, plan=str(plan))
 
         for name, spec in scenario.agents.items():
             try:
                 client.spawn_vessel(name, (spec.position.lat, spec.position.lon),
                                     spec.model, spec.linear_velocity,
                                     spec.angular_velocity_max, heading=spec.heading_deg)
+                logs.log_event('spawn', agent=name)
             except Exception as e:
                 client.log_error(f"[spawn] échec pour '{name}' (model={spec.model!r}): {e}")
+                logs.log_event('spawn_error', agent=name, error=str(e))
             time.sleep(3.0)
 
         threads = []
@@ -57,7 +61,7 @@ def main(scenario_name: str) -> None:
             watched = methods.resolve_watched_agents(state, name, tokens)
             threads.append(threading.Thread(
                 target=run_agent,
-                args=(name, spec.mission.to_htn_task(), state, planner, client, watched),
+                args=(name, spec.mission.to_htn_task(), state, planner, client, logs, watched),
                 daemon=True,
             ))
         for t in threads:
@@ -68,6 +72,7 @@ def main(scenario_name: str) -> None:
         pass
     finally:
         if logs:
+            logs.log_event('run_end')
             logs.close()
         if client:
             client.shutdown()

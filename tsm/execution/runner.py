@@ -3,6 +3,7 @@ le client est reçu en paramètre (duck-typé), la boucle interroge client.ok().
 from __future__ import annotations
 
 import csv
+import json
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,18 +21,20 @@ def _ts() -> str:
 
 
 class RunLogs:
-    """poses.csv + waypoints.csv, flushés à chaque ligne — sans flush, un kill
-    brutal laissait un gros bloc dans le buffer OS (observé : une plage de NUL
-    à la relecture)."""
+    """poses.csv + waypoints.csv + events.jsonl, flushés à chaque ligne —
+    sans flush, un kill brutal laissait un gros bloc dans le buffer OS
+    (observé : une plage de NUL à la relecture)."""
 
     def __init__(self, directory: Any = 'logs') -> None:
         d = Path(directory)
         d.mkdir(exist_ok=True)
         self._pose_f = open(d / 'poses.csv', 'w', newline='')
         self._wp_f = open(d / 'waypoints.csv', 'w', newline='')
+        self._events_f = open(d / 'events.jsonl', 'w')
         self._pose = csv.writer(self._pose_f)
         self._wp = csv.writer(self._wp_f)
         self._wp_lock = threading.Lock()
+        self._events_lock = threading.Lock()
         self._pose.writerow(['timestamp', 'agent', 'lat', 'lon'])
         self._wp.writerow(['timestamp', 'agent', 'lat', 'lon'])
 
@@ -45,9 +48,16 @@ class RunLogs:
             self._wp.writerow([_ts(), agent, lat, lon])
             self._wp_f.flush()
 
+    def log_event(self, kind: str, **fields: Any) -> None:
+        # appelé depuis les threads agents ET le thread principal
+        with self._events_lock:
+            self._events_f.write(json.dumps({'t': _ts(), 'kind': kind, **fields}) + '\n')
+            self._events_f.flush()
+
     def close(self) -> None:
         self._pose_f.close()
         self._wp_f.close()
+        self._events_f.close()
 
 
 def sync_positions(state: Any, client: Any) -> None:
@@ -65,7 +75,7 @@ def sync_positions(state: Any, client: Any) -> None:
 
 
 def run_agent(name: str, task: tuple[Any, ...], state: Any, planner: Any,
-              client: Any, watched_names: set[str]) -> None:
+              client: Any, logs: Any, watched_names: set[str]) -> None:
     """Replanification événementielle : bloque jusqu'à ce qu'une position
     surveillée change réellement, REPLAN_SAFETY_TIMEOUT en filet."""
     wake = threading.Event()
@@ -73,9 +83,17 @@ def run_agent(name: str, task: tuple[Any, ...], state: Any, planner: Any,
         client.register_watch(watched, wake)
     client.log_info(f'[{name}] surveille : {sorted(watched_names | {name})}')
 
+    last_plan = None  # aucun plan encore émis : le premier calcul est toujours un changement
     while client.ok():
         sync_positions(state, client)
         plan = planner.find_plan(state, task)
+        plan_repr = repr(plan)
+        if plan_repr != last_plan:
+            last_plan = plan_repr
+            if plan is not False and plan:
+                logs.log_event('plan', agent=name, plan=[str(a) for a in plan])
+            else:
+                logs.log_event('plan', agent=name, plan=[], note='inactif')
         if plan is not False and plan:
             client.log_info(f'[{name}] exécute plan: {[a[0] for a in plan]}')
             planner.run_commands(state, plan)
