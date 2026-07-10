@@ -76,4 +76,7 @@ def main(scenario_name: str) -> None:
             logs.close()
         if client:
             client.shutdown()
-        rclpy.shutdown()
+        # Le handler SIGINT de rclpy a pu invalider le contexte avant nous :
+        # re-shutdown lèverait RCLError et transformerait un arrêt propre en rc=1.
+        if rclpy.ok():
+            rclpy.shutdown()
