@@ -202,8 +202,9 @@ def _resolve(arg, agent, state, tokens):
 
     # Any other "__token__" (registered in resolve_tokens or not, e.g.
     # "__cible__", "__zone__", "__intruder__") — per-agent override first,
-    # then the generic role/kind/marker/proximity fallback.
-    if arg.startswith('__') and arg.endswith('__'):
+    # then the generic role/kind/marker/proximity fallback. Non-string args
+    # (e.g. a literal [lat, lon] subtask arg) aren't tokens — pass through.
+    if isinstance(arg, str) and arg.startswith('__') and arg.endswith('__'):
         resolved = _resolve_agent_token(state, agent, arg, tokens)
         if resolved:
             return resolved
