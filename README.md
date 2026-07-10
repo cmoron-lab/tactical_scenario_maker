@@ -23,7 +23,7 @@ les positions observées. Architecture cible : docs/ARCHITECTURE.md.
 | tsm/domain/ | schéma de scénario v1, doctrine HTN, géométrie | Domaine tactique |
 | tsm/planning/ | Planner (GTPyhop confiné), méthodes HTN | Domaine tactique |
 | tsm/execution/ | actions/commands, boucle agent, assemblage | Exécutif de mission (embryon) |
-| tsm/lotusim/ | adaptateur ROS (seul import rclpy) | Frontière LOTUSim / future autonomie |
+| tsm/lotusim/ | adaptateur ROS (seule frontière de transport ROS ; runtime.py importe aussi rclpy pour init/shutdown) | Frontière LOTUSim / future autonomie |
 | tsm/web/ | API HTTP locale | Éditeur tactique (provisoire) |
 | scenarios/ | scénarios JSON v1 (l'identité = le nom de fichier) |  |
 | doctrine/ | knowledge_base.json — la doctrine HTN |  |

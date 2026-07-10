@@ -36,7 +36,7 @@ class RunLogs:
         self._wp.writerow(['timestamp', 'agent', 'lat', 'lon'])
 
     def log_pose(self, agent: str, lat: float, lon: float) -> None:
-        # appelé depuis le callback du client, déjà sérialisé par son verrou
+        # appelé depuis le callback du client — sérialisé par le callback group mutuellement exclusif de l'executor, pas par le verrou du client (on_pose est appelé hors verrou)
         self._pose.writerow([_ts(), agent, lat, lon])
         self._pose_f.flush()
 
