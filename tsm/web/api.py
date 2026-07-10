@@ -8,13 +8,15 @@ from tsm.domain.scenario import (Scenario, delete_scenario, list_scenarios,
                                  load_scenario, save_scenario)
 from tsm.execution.actions import aller_a, creation_agent
 from tsm.planning.planner import Planner, build_state
-from tsm.web.runs import RunManager
+from tsm.web.runs import REPO_ROOT, RunManager
 
 
 class Api:
     def __init__(self, run_manager: RunManager | None = None) -> None:
         self._planner = Planner(doctrine.load(), actions=(aller_a, creation_agent))
-        self._runs = run_manager or RunManager()
+        # logs_dir ancré au repo : le serveur peut être lancé d'ailleurs que la racine,
+        # le runtime écrit toujours dans REPO_ROOT/logs (cwd du Popen).
+        self._runs = run_manager or RunManager(logs_dir=REPO_ROOT / 'logs')
 
     def scenarios(self) -> list[str]:
         return list_scenarios()

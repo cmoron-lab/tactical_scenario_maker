@@ -50,3 +50,4 @@ les positions observées. Architecture cible : docs/ARCHITECTURE.md.
 ## Limites connues
 
 - Sauvegarder un scénario via l'UI perd les conditions non affichées par l'éditeur (celles que la tâche sélectionnée ne référence pas, ex. role/is_intruder) — défaut antérieur au refactor, correctif envisagé dans un incrément suivant.
+- Un seul run à la fois : le launch renvoie 409 si un run est en cours (suivi temps réel — état, timeline d'événements, mini-carte, arrêt — dans l'onglet Exécution).
