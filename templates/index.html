@@ -1065,7 +1065,6 @@ header {
   font-weight: 700;
   letter-spacing: 0.3px;
 }
-.status-badge.idle     { background: rgba(100,116,139,0.12); color: var(--status-idle); }
 .status-badge.running  { background: rgba(34,197,94,0.14);   color: var(--status-running); }
 .status-badge.stopping { background: rgba(245,158,11,0.16);  color: var(--status-warning); }
 .status-badge.finished { background: rgba(59,130,246,0.14);  color: var(--status-finished); }
@@ -1495,6 +1494,7 @@ let runStatus = { state: 'idle', scenario: null, pid: null, started_at: null, re
 let lastStartedAt = null;   // detects a NEW run (backend truncates events.jsonl on launch)
 let runEvents = [];
 let runEventsCursor = 0;
+let runEndedAt = null;      // ms epoch — gèle la durée affichée en fin de run (t du run_end, sinon 1re observation finished/failed)
 let execTabActive = false;
 
 function markPollingUnknown() {
@@ -1511,11 +1511,15 @@ function pollTick() {
       // at 0) — the client-side accumulator must restart too, not just its cursor.
       runEvents = [];
       runEventsCursor = 0;
+      runEndedAt = null;
       lastStartedAt = s.started_at;
       autoFit = true;
       updateRefitBtn();
       renderExecEvents();
     }
+    // Fige la durée dès qu'on observe la fin (fallback approximatif : le t du
+    // run_end, plus précis, le remplace quand l'événement arrive).
+    if ((s.state === 'finished' || s.state === 'failed') && runEndedAt === null) runEndedAt = Date.now();
     runStatus = s;
     updateRunBadge();
     updateLaunchButtonState();
@@ -1529,7 +1533,11 @@ pollTick();
 
 function fetchRunEvents() {
   fetch(`/api/run/events?since=${runEventsCursor}`).then(r => r.json()).then(d => {
-    if (d.events && d.events.length) runEvents.push(...d.events);
+    if (d.events && d.events.length) {
+      runEvents.push(...d.events);
+      const end = d.events.find(e => e.kind === 'run_end');
+      if (end && end.t) runEndedAt = new Date(end.t).getTime();
+    }
     runEventsCursor = d.next;
     renderExecEvents();
   }).catch(() => markPollingUnknown());
@@ -1575,7 +1583,8 @@ function updateLaunchButtonState() {
 
 function formatElapsed() {
   if (!runStatus.started_at) return '—';
-  const sec = Math.max(0, Math.floor((Date.now() - new Date(runStatus.started_at).getTime()) / 1000));
+  const end = runEndedAt ?? Date.now();
+  const sec = Math.max(0, Math.floor((end - new Date(runStatus.started_at).getTime()) / 1000));
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
   const s = String(sec % 60).padStart(2, '0');
   return `${m}:${s}`;
@@ -1731,7 +1740,7 @@ function renderMap(agents) {
       const marker = L.circleMarker([a.lat, a.lon], {
         radius: 7, fillColor: color, fillOpacity: 0.9, color: '#fff', weight: 2,
       }).addTo(map);
-      marker.bindTooltip(name, { permanent: true, direction: 'right', offset: [10, 0], className: 'exec-map-tooltip' });
+      marker.bindTooltip(escHtml(name), { permanent: true, direction: 'right', offset: [10, 0], className: 'exec-map-tooltip' });
       const trail = L.polyline([], { color, weight: 2, opacity: 0.65 }).addTo(map);
       layer = mapLayers[name] = { marker, trail, wpMarkerObj: null, wpLine: null };
     }
@@ -2209,9 +2218,9 @@ function launchScenario(name) {
           ● main.py lancé — scénario : <strong>${name}</strong> · PID ${data.pid}
         </div>`;
       // Un run est désormais en cours : le bouton reste grisé (updateLaunchButtonState
-      // le confirmera au prochain tick) et on bascule sur la vue qui le montre.
+      // le confirmera au prochain tick) et on bascule sur la vue qui le montre —
+      // switchTab('execution') déclenche déjà un pollTick() immédiat.
       switchTab('execution');
-      pollTick();
     })
     .catch(() => {
       if (statusEl) statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
