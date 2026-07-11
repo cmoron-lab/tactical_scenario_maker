@@ -1,59 +1,63 @@
 # Runbook — rig e2e LOTUSim + tsm sur le Mac
 
-Séquence validée le 2026-07-11 (remontage manuel complet). Topologie :
+Séquence validée le 2026-07-11, **simplifiée après test empirique** : deux étapes des
+recettes historiques (warmup ROS avant gz, patch `max_step_size` 0.005) étaient des
+reliques des conteneurs Rosetta/amd64 et de la co-sim xdyn — inutiles sur l'image
+arm64 native en mode cinématique (vérifié : gz démarre sur graphe ROS vide ; à 0.2 le
+mouvement est régulier, poursuite nominale, RTF≈1).
+
+## Topologie — qui lance quoi
 
 ```
 Mac                              Conteneur tsm-e2e (image lotusim:jazzy, arm64 natif)
 ──────────────────────────      ─────────────────────────────────────────────
-                                 ① daemon ROS (warmup)      sinon gz deadlock au boot
-                                 ② gz sim headless          launcher upstream `lotusim run`
-                                 ③ app.py :8080             serveur tsm → spawne les runtimes rclpy
-                                 ④ backend rclnodejs :5000  pont ROS→WS, mappé :5050 côté Mac
-⑤ vite :5173 (bun run dev)  ──► REST+WS :5050
+                                 ① lotusim run              gz headless ; les nœuds ROS
+                                                            vivent DANS les plugins gz
+                                 ② app.py :8080             serveur tsm → spawne les runtimes rclpy
+                                 ③ backend rclnodejs :5000  pont ROS→WS, mappé :5050 côté Mac
+④ vite :5173 (bun run dev)  ──► REST+WS :5050
 navigateur ──► :5173 (carte LOTUSim) et :8080 (tsm, onglet Exécution)
 ```
 
-Contraintes structurantes :
-- **Un participant ROS doit exister avant gz** (sinon gz se bloque au démarrage).
-- Le backend écoute sur **5000 hardcodé** ; AirPlay squatte 5000 sur macOS → mapping `5050:5000`.
-- `FASTDDS_BUILTIN_TRANSPORTS=UDPv4` est un **ENV de l'image** — inutile de l'exporter.
-- Tout ce qui n'est ni dans l'image ni sur `/lab` meurt avec le conteneur : le patch
-  `max_step_size` du monde et l'installation de node sont à refaire à chaque recréation.
+Point conceptuel : **on ne lance jamais ROS ni gz à la main** dans l'écosystème LOTUSim.
+Le launcher upstream (`LOTUSim/launch/lotusim run`) source l'environnement, règle les
+chemins de plugins gz et lance `gz sim` ; ce sont les plugins (entity_manager,
+WaypointFollower, RenderPlugin) qui créent les nœuds ROS — le publisher de
+`/lotusim/poses` est `gz_entity_management_node`.
 
 ## Séquence
 
 ```bash
-# 0. Conteneur inerte, lab monté, ports publiés
+# 0. Conteneur inerte, lab monté, ports publiés.
+#    5050:5000 : le backend écoute sur 5000 hardcodé, et AirPlay squatte 5000 sur macOS.
+#    /lab : les checkouts du Mac, vus en live par le conteneur.
 docker run -d --name tsm-e2e -p 8080:8080 -p 5050:5000 \
   -v ~/src/lotusim-lab:/lab lotusim:jazzy sleep infinity
 
-# 1. Warmup ROS (participant DDS persistant avant gz)
-docker exec tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 daemon start'
-
-# 2. Pas de temps du monde : 0.2 (défaut image) → 0.005, sinon WaypointFollower haché
-docker exec tsm-e2e sed -i 's|<max_step_size>0.2</max_step_size>|<max_step_size>0.005</max_step_size>|' \
-  /lotusim_ws/src/LOTUSim/assets/worlds/lotusim.world
-
-# 3. gz headless via le launcher upstream (sourcing + env gz + gz sim -s -r)
+# 1. La simulation — le launcher upstream fait tout (env gz + monde + plugins).
+#    FASTDDS_BUILTIN_TRANSPORTS=UDPv4 est déjà un ENV de l'image.
 docker exec -d tsm-e2e bash -lc '/lotusim_ws/src/LOTUSim/launch/lotusim run > /tmp/gz.log 2>&1'
-# vérif : ros2 topic list | grep lotusim  → /lotusim/poses et consorts
+# vérif : docker exec tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic list'
+#         → /lotusim/poses et consorts
 
-# 4. Serveur tsm (stdlib ; dans le conteneur parce que ses runtimes enfants sont rclpy)
+# 2. Serveur tsm. Lui-même est stdlib pur, mais il vit dans le conteneur parce que les
+#    runtimes qu'il spawne au launch (main.py <scenario>) sont rclpy et doivent partager
+#    le graphe ROS de gz.
 docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
   source /lotusim_ws/install/setup.bash && cd /lab/tactical_scenario_maker && \
   python3 -u app.py 8080 > /tmp/app.log 2>&1'
-# vérif : curl -s localhost:8080/api/run  → {"state": "idle", ...}
+# vérif : curl -s localhost:8080/api/run → {"state": "idle", ...}
 
-# 5. node n'est PAS dans l'image (les node_modules du backend survivent sur /lab)
+# 3. Backend UI. node n'est PAS dans l'image (à réinstaller à chaque recréation de
+#    conteneur — les node_modules, eux, survivent sur /lab). Lancer depuis /lab
+#    (clone patché multi-clients), PAS depuis la copie de l'image.
 docker exec tsm-e2e bash -c 'apt-get update -qq && apt-get install -y -qq nodejs npm'
-
-# 6. Backend UI — depuis /lab (clone patché multi-clients), PAS la copie de l'image
 docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
   source /lotusim_ws/install/setup.bash && cd /lab/LOTUSim-UI-backend && \
   npx ts-node src/main.ts > /tmp/backend.log 2>&1'
-# vérif : curl -s localhost:5050/instances  → ["lotusim"]
+# vérif : curl -s localhost:5050/instances → ["lotusim"]
 
-# 7. Frontend, sur le Mac (seul étage sans ROS)
+# 4. Frontend, sur le Mac — seul étage sans ROS, il ne parle que REST/WS sur :5050.
 cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev
 ```
 
@@ -80,3 +84,6 @@ docker rm -f tsm-e2e && pkill -f "[b]un.*vite"
   "{cmd: {cmd_type: 1, vessel_name: <nom>}}"`.
 - Tuer par PID (`docker exec … kill <pid>`), jamais `pkill -f <motif>` — le motif matche
   le shell qui le porte, y compris à travers `docker exec` (astuce : `pkill -f "[t]s-node"`).
+- Co-sim **xdyn** (physique, hors périmètre de ce runbook) : là, le petit pas de temps
+  (0.005) et les précautions historiques restent de mise — voir la mémoire de session
+  « lotusim gz Rosetta runtime ».
