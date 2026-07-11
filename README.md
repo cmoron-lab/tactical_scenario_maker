@@ -11,6 +11,20 @@ les positions observées. Architecture cible : docs/ARCHITECTURE.md.
     python3 main.py <scenario>     # runtime — dans l'environnement ROS,
                                    # instance LOTUSim déjà démarrée
 
+En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
+(launch → suivi temps réel dans l'onglet Exécution → arrêt).
+
+### Stack complète (avec simulation)
+
+1. **Simulation** : `lotusim run` (launcher upstream de LOTUSim) — lance gz ;
+   les nœuds ROS vivent dans les plugins gz, rien d'autre à démarrer.
+2. **Ce serveur** : `python3 app.py`, dans le même environnement ROS que gz
+   (les runtimes spawnés au launch sont rclpy).
+3. **Optionnel, la carte LOTUSim** : backend + frontend LOTUSim-UI.
+
+Séquence détaillée sur le rig conteneurisé (commandes exactes, vérifications,
+teardown, pièges) : `docs/rig-e2e.md`.
+
 ## Développement
 
     uv run pytest                  # tests (sans ROS)
