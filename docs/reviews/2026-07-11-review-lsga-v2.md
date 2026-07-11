@@ -1,6 +1,7 @@
 # Note de review — LSGA Architecture v2
 
 **Document reviewé** : LOTUSim Scenario Generation Architecture (LSGA), v2 clean
+— [conversion markdown pour relecture](lsga-architecture-v2.md) (le .docx reste la référence)
 **Auteure** : Estelle (PO LOTUSim)
 **Reviewer** : Cyril Moron (Architecte LOTUSim)
 **Date** : 2026-07-11
