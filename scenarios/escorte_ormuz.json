@@ -11,7 +11,7 @@
     {"from": "bleue", "to": ["verte"], "attitude": "protect"}
   ],
   "zones": {
-    "passe_ormuz": {"center": {"lat": 1.2620, "lon": 103.7500}, "radius_deg": 0.00015},
+    "passe_ormuz": {"center": {"lat": 1.2620, "lon": 103.7500}, "radius_deg": 0.0008},
     "sortie_ouest": {"center": {"lat": 1.2670, "lon": 103.7500}, "radius_deg": 0.00015},
     "repli_nord": {"center": {"lat": 1.2630, "lon": 103.7560}, "radius_deg": 0.00015}
   },
