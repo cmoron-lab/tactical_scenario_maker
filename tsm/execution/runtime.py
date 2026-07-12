@@ -241,7 +241,13 @@ def _main_v3(scenario_name: str, profile_name: str) -> None:
         # préflight (loop_exited_cleanly reste False dans ce cas, le verdict
         # reste 'pending', pas de report.json : cf. RunManager.status()).
         if loop_exited_cleanly and controller is not None and 'verdict' not in run_result:
-            controller.stop('sigint')
+            # Le handler SIGINT de rclpy peut avoir invalidé le contexte : toute
+            # annulation transport (stop_vessel → create_client) lèverait RCLError
+            # et avorterait ce finally (ni report ni run_end, rc=1). Contexte mort
+            # ⇒ pas d'annulation physique — la purge préflight du run suivant
+            # ramasse les navires encore en route.
+            if rclpy.ok():
+                controller.stop('sigint')
             finished = world_store.snapshot().sim_time_s
             run_result.update(verdict='cancelled', reason=None, finished_sim_time_s=finished)
             if logs:
