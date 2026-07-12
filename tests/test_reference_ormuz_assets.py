@@ -107,3 +107,41 @@ def test_find_plan_produces_primitive_tuples_through_real_registration():
     # poursuivre_cargo inapplicable
     state.agents['cargo_1']['available'] = False
     assert planner.find_plan(state, ('poursuivre_cargo', 'vedette_1')) is False
+
+
+# ── Poste tenu : un suivi borné déjà satisfait se décompose en [], sinon le
+# superviseur (qui ne soumet que plan[0] et replanifie après chaque objectif
+# terminal) resoumettrait follow_target à l'infini et l'attaque
+# d'escorter_convoi ne serait jamais soumise (livelock).
+
+def _planner_state(positions):
+    state = gtpyhop.State('ormuz_pos')
+    state.agents = {name: {'available': True, 'pos': {'lat': lat, 'lon': lon}}
+                    for name, (lat, lon) in positions.items()}
+    return state
+
+
+def test_escorter_convoi_at_station_decomposes_to_attack_only():
+    planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
+    # 0.0001 <= stop_distance 0.00045 : le suivi est déjà satisfait
+    state = _planner_state({'escorte': (1.2631, 103.7520), 'vedette_1': (1.2630, 103.7520)})
+    assert planner.find_plan(state, ('escorter_convoi', 'escorte')) == \
+        [('attack_target', 'escorte', 'vedette_1')]
+
+
+def test_escorter_convoi_far_from_threat_still_follows_first():
+    planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
+    state = _planner_state({'escorte': (1.2600, 103.7500), 'vedette_1': (1.2630, 103.7520)})
+    plan = planner.find_plan(state, ('escorter_convoi', 'escorte'))
+    assert plan[0] == ('follow_target', 'escorte', 'vedette_1', 0.00045)
+
+
+def test_follow_target_m_without_stop_distance_never_self_satisfies():
+    # Poursuite pure (poursuivre_cargo) : même à distance nulle, le suivi
+    # reste émis — seul un suivi borné (stop_distance) peut être « tenu ».
+    state = _state({
+        'vedette_2': {'available': True, 'pos': {'lat': 1.2630, 'lon': 103.7520}},
+        'cargo_1': {'available': True, 'pos': {'lat': 1.2630, 'lon': 103.7520}},
+    })
+    plan = methods.follow_target_m(state, 'vedette_2', 'cargo_1')
+    assert plan == [('follow_target', 'vedette_2', 'cargo_1', None)]

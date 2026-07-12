@@ -447,6 +447,17 @@ def follow_target_m(state: Any, agent: str, target: str,
                     stop_distance_deg: float | None = None) -> list[tuple[Any, ...]] | bool:
     if target not in state.agents or not state.agents[target].get("available", True):
         return False
+    # Poste tenu : un suivi borné déjà satisfait se décompose en [] (tâche
+    # trivialement accomplie pour GTPyhop). Sans ça, le superviseur v3 — qui
+    # ne soumet que plan[0] et replanifie après chaque objectif terminal —
+    # resoumettrait follow_target à l'infini et l'attack_target
+    # d'escorter_convoi ne serait jamais soumis (livelock à poste tenu).
+    # Une poursuite sans stop_distance ne s'auto-satisfait jamais.
+    if stop_distance_deg is not None:
+        self_pos = state.agents.get(agent, {}).get('pos')
+        target_pos = state.agents[target].get('pos')
+        if self_pos and target_pos and distance_deg(self_pos, target_pos) <= stop_distance_deg:
+            return []
     return [("follow_target", agent, target, stop_distance_deg)]
 
 
