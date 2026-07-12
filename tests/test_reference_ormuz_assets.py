@@ -145,3 +145,39 @@ def test_follow_target_m_without_stop_distance_never_self_satisfies():
     })
     plan = methods.follow_target_m(state, 'vedette_2', 'cargo_1')
     assert plan == [('follow_target', 'vedette_2', 'cargo_1', None)]
+
+
+# ── Poste d'escorte : sans menace visible, escorter_convoi tient la station
+# sur le convoi (§8.2 « station de l'escorte ») — sinon l'escorte reste
+# immobile pendant le transit et l'interception devient une chasse arrière
+# perdue (vedette 8 m/s > escorte 6 m/s, constaté au rig, run r-000004).
+
+def test_escorter_convoi_holds_station_on_convoy_when_no_threat_in_sight():
+    state = _state({'cargo_1': {'available': True,
+                                'pos': {'lat': 1.2620, 'lon': 103.75}},
+                    'escorte': {'available': True,
+                                'pos': {'lat': 1.2600, 'lon': 103.75}}})
+    plan = methods.escorter_convoi_m(state, 'escorte')
+    assert plan == [('follow_target', 'escorte', 'cargo_1', 0.0005)]
+
+
+def test_escorter_convoi_idles_at_station_until_threat_appears():
+    state = _state({'cargo_1': {'available': True,
+                                'pos': {'lat': 1.2600, 'lon': 103.75}},
+                    'escorte': {'available': True,
+                                'pos': {'lat': 1.2598, 'lon': 103.7497}}})
+    assert methods.escorter_convoi_m(state, 'escorte') == []
+
+
+def test_escorter_convoi_returns_to_station_after_threat_destroyed():
+    state = _state({'vedette_1': {'available': False},
+                    'cargo_1': {'available': True,
+                                'pos': {'lat': 1.2650, 'lon': 103.75}},
+                    'escorte': {'available': True,
+                                'pos': {'lat': 1.2630, 'lon': 103.7520}}})
+    plan = methods.escorter_convoi_m(state, 'escorte')
+    assert plan == [('follow_target', 'escorte', 'cargo_1', 0.0005)]
+
+
+def test_escorter_convoi_inapplicable_without_threat_nor_convoy():
+    assert methods.escorter_convoi_m(_state({}), 'escorte') is False

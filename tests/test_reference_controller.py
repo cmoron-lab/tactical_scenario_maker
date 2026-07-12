@@ -242,3 +242,25 @@ def test_terminal_verdict_publishes_verdict_event_and_neutralizes_ticks():
     assert any(e.get("type") == "run_stop" for e in events)
     controller.tick(snapshot(6.0, {"cargo_1": (1.2599, 103.7497), "escorte": (1.26, 103.75)}))
     assert len(transport.waypoints) == count  # tick neutralisé après le verdict
+
+
+# ── Perte adjugée = replanification épisodique (§4.1 : « changement d'état
+# observé significatif ») : sans annulation des objectifs actifs, une
+# poursuite non bornée bloque à jamais la bascule de branche doctrinale
+# (le repli de vedette_2 après la perte de vedette_1, constaté au rig).
+
+def test_casualty_triggers_episodic_replan_of_active_objectives():
+    controller = _ormuz_controller()
+    controller.start_initial_forces()
+    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    cargo = controller.supervisor("verte", "cargo_1")
+    first = cargo.active_objective_id
+    assert first is not None
+    controller.tick(snapshot(1, {"cargo_1": (1.2600, 103.7497), "escorte": (1.26, 103.75)},
+                             destroyed={"vedette_1"}))
+    assert cargo.active_objective_id is None
+    assert cargo.last_terminal_update.status is ObjectiveStatus.CANCELLED
+    controller.tick(snapshot(2, {"cargo_1": (1.2600, 103.7497), "escorte": (1.26, 103.75)},
+                             destroyed={"vedette_1"}))
+    assert cargo.active_objective_id is not None
+    assert cargo.active_objective_id != first
