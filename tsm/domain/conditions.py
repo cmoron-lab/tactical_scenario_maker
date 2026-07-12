@@ -10,8 +10,15 @@ from math import hypot
 from typing import Any
 
 from tsm.domain.reference import ReferenceScenario
-from tsm.domain.scenario import ScenarioError
+from tsm.domain.scenario import Position, ScenarioError
 from tsm.execution.world import WorldSnapshot
+
+
+def distance_deg(a: Position, b: Position) -> float:
+    """Distance euclidienne en espace degrés (pas haversine), cohérente avec
+    les unités _deg du plan v3. Réutilisée par le backend cinématique des
+    objectifs (tsm/execution/autonomy.py)."""
+    return hypot(a.lat - b.lat, a.lon - b.lon)
 
 
 def _agent_in_zone(agent: str, zone_name: str, world: WorldSnapshot,
@@ -22,7 +29,7 @@ def _agent_in_zone(agent: str, zone_name: str, world: WorldSnapshot,
     if pos is None:
         return False
     zone = scenario.zones[zone_name]
-    return hypot(pos.lat - zone.lat, pos.lon - zone.lon) <= zone.radius_deg
+    return distance_deg(pos, Position(zone.lat, zone.lon)) <= zone.radius_deg
 
 
 def evaluate(condition: Mapping[str, Any], world: WorldSnapshot,

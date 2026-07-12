@@ -1,9 +1,12 @@
 # tests/reference_fixtures.py
 from collections.abc import Mapping
+from typing import Any
 
 from tsm.domain.profile import ExecutionProfile
 from tsm.domain.reference import ReferenceScenario
 from tsm.domain.scenario import Position
+from tsm.execution.autonomy import KinematicWaypointFollower
+from tsm.execution.objectives import Objective
 from tsm.execution.world import WorldSnapshot
 
 
@@ -43,3 +46,27 @@ def snapshot(sim_time_s: float, positions: Mapping[str, tuple[float, float]],
         sim_time_s=sim_time_s,
         positions={name: Position(lat, lon) for name, (lat, lon) in positions.items()},
         destroyed=frozenset(destroyed or set()))
+
+
+def objective(goal_id: str, agent: str, capability: str,
+              parameters: Mapping[str, Any],
+              deadline_sim_time_s: float = 60.0) -> Objective:
+    return Objective(goal_id, agent, capability, dict(parameters), 0.0,
+                     deadline_sim_time_s)
+
+
+class FakeTransport:
+    def __init__(self) -> None:
+        self.waypoints: list[tuple[str, float, float]] = []
+        self.stopped: list[str] = []
+
+    def set_waypoints(self, agent: str, lat: float, lon: float) -> None:
+        self.waypoints.append((agent, lat, lon))
+
+    def stop_vessel(self, agent: str) -> None:
+        self.stopped.append(agent)
+
+
+def kinematic_provider() -> tuple[KinematicWaypointFollower, FakeTransport]:
+    transport = FakeTransport()
+    return KinematicWaypointFollower(transport), transport
