@@ -198,12 +198,18 @@ class MissionSupervisor:
         self.handle_update(provider.submit(goal, world))
 
     def handle_update(self, update: ObjectiveUpdate) -> None:
-        self._publish({
-            'type': 'objective_update', 'objective_id': update.objective_id,
-            'status': update.status.value, 'reason': update.reason,
-            'agent': self._agent, 'force': self._force,
-            'sim_time_s': update.sim_time_s,
-        })
+        # Seules les TRANSITIONS sont journalisées : submitted/accepted marquent
+        # le début, le statut terminal la fin. Le provider cinématique émet
+        # IN_PROGRESS à chaque tick — publiées, ces lignes noieraient la
+        # timeline (Task 7 n'a pas d'icône in_progress) et gonfleraient
+        # events.jsonl sans porter d'information.
+        if update.status is not ObjectiveStatus.IN_PROGRESS:
+            self._publish({
+                'type': 'objective_update', 'objective_id': update.objective_id,
+                'status': update.status.value, 'reason': update.reason,
+                'agent': self._agent, 'force': self._force,
+                'sim_time_s': update.sim_time_s,
+            })
         if update.objective_id != self.active_objective_id:
             return  # update périmé (objectif déjà conclu) : ignoré
         if update.status in _TERMINAL_STATUSES:

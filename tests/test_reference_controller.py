@@ -101,6 +101,29 @@ def test_terminal_update_from_provider_is_routed_back_and_clears_active():
     assert cargo.last_terminal_update.status is ObjectiveStatus.SUCCEEDED
 
 
+def test_objective_events_log_transitions_only_never_in_progress_noise():
+    events = []
+    scenario = ormuz_scenario()
+    controller = RunController(
+        scenario=scenario, graph=compile_authored_graph(scenario),
+        profile=profile_for_scenario(scenario), world_store=WorldStore(),
+        white_cell=NoopWhiteCell(), transport=FakeTransport(),
+        publish_event=events.append)
+    controller.start_initial_forces()
+    # goto de cargo_1 vers sortie_ouest (1.267, 103.75) : plusieurs ticks en
+    # route (in_progress côté provider), puis arrivée.
+    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(2, {"cargo_1": (1.2640, 103.7500), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(3, {"cargo_1": (1.2670, 103.7500), "escorte": (1.26, 103.75)}))
+    goal_id = controller.supervisor("verte", "cargo_1").last_terminal_update.objective_id
+    trail = [(e["type"], e.get("status")) for e in events
+             if e.get("objective_id") == goal_id]
+    assert trail == [("objective_submitted", None),
+                     ("objective_update", "accepted"),
+                     ("objective_update", "succeeded")]
+
+
 # ── Préflight refusé : RunStartError, zéro superviseur ───────────────────────
 
 def test_incompatible_profile_raises_before_any_supervisor():
