@@ -8,8 +8,11 @@ les positions observées. Architecture cible : docs/lsga-architecture-v3.md.
 ## Lancer
 
     python3 app.py [port]          # UI locale (défaut : 8080) — sans ROS
-    python3 main.py <scenario>     # runtime — dans l'environnement ROS,
-                                   # instance LOTUSim déjà démarrée
+    python3 main.py <scenario>     # runtime v1 (legacy) — dans l'environnement
+                                   # ROS, instance LOTUSim déjà démarrée
+    python3 main.py escorte_ormuz --profile kinematic-ormuz
+                                   # runtime v3 : scénario de référence + profil
+                                   # d'exécution — cellule blanche et verdict
 
 En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
 (launch → suivi temps réel dans l'onglet Exécution → arrêt).

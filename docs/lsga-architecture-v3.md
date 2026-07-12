@@ -912,18 +912,25 @@ poursuite multi-agents avec suivi d'exécution temps réel) :
 
 | Composant v3 | Équivalent tsm | Statut |
 |---|---|---|
-| Scenario Request | Schéma JSON v1 versionné | Implémenté — à étendre v2 (forces, end state, triggers) |
-| Validation | Validation structurelle au chargement | Implémenté (structurel) ; validation métier à spécifier |
-| WAL | `build_state` + `sync_positions`, préconditions calculées | Implémenté — mêmes « prédicats calculés » |
-| Domain HDDL | `knowledge_base.json` + méthodes HTN Python | Implémenté **en code** — delta n°1 : traduction HDDL (dépend du profil) |
+| Scenario Request | Schéma JSON v2 (forces, relations, `end`, triggers) + profil d'exécution séparé et journalisé | Implémenté pour Escorte Ormuz |
+| Validation | Chargement structurel + validation statique scénario↔profil (capacités requises) au préflight | Implémenté |
+| WAL | `WorldStore`/`WorldSnapshot` — pose observée seule source de vérité, `destroyed` monotone | Implémenté |
+| Domain HDDL | `knowledge_base.json` + méthodes HTN Python | Implémenté **en code** — delta n°1 (N1) : traduction HDDL non faite (incrément 6) ; doctrine Ormuz figée dans le code (cibles/zones nommées en dur) |
 | Planning Engine Wrapper | Classe `Planner` (GTPyhop confiné, substituable) | Implémenté |
-| EAL / Execution Graph | `make_commands` + runner | Implémenté en **flux** — delta n°2 : artefact versionnable |
-| Supervision (N2) | Boucle exécutive par agent (thread, état local, réveil événementiel) | Implémenté — fusion N2/N3 à résorber (§4.7) |
-| Guidage (N3) | WaypointFollower LOTUSim (cinématique) | Implémenté — `follow_target` et actions typées manquantes |
-| Cellule blanche | Journal d'événements, cycle de vie du run, IHM temps réel | Embryon (monitoring seul) — triggers, adjudication, end state manquants |
+| EAL / Execution Graph | Primitives typées `goto`/`follow_target`/`attack_target` + provenance `logs/<run_id>/` | Implémenté en **flux** — delta n°2 : Execution Graph comme artefact versionnable |
+| Supervision (N2) | `RunController` + une `MissionSupervisor` événementielle par agent (boucle de tick unique) | Implémenté pour Escorte Ormuz — N2/N3 séparés |
+| Guidage (N3) | `KinematicWaypointFollower` (`goto`, `follow_target`) + engagement arbitré par la cellule blanche | Implémenté pour Escorte Ormuz |
+| Cellule blanche | Triggers, adjudication des engagements, verdict (succès/échec/timeout) sur temps simulé, provenance, IHM temps réel | Implémenté pour Escorte Ormuz |
 
-Les deltas sont derrière des coutures en place (doctrine derrière un store,
-commandes derrière le runner) — résorbables par incréments, sans big-bang.
+Les incréments 1–4 (§10.2) sont **implémentés pour Escorte Ormuz** et prouvés
+e2e (rig ROS, §`docs/rig-e2e.md` ; suite mémoire
+`tests/test_reference_e2e_memory.py`). Deux limites explicites subsistent : la
+perception reste `information_policy: omniscient` — la perception par force
+(incrément 5) est câblée mais non exercée par le scénario de référence ; et le
+niveau 1 tourne sur des méthodes HTN **Python**, pas encore une traduction HDDL
+(incrément 6, delta n°1). Les deltas restants sont derrière des coutures en
+place (doctrine derrière un store, primitives derrière le contrôleur) —
+résorbables par incréments, sans big-bang.
 
 ## 10.2 Incréments logiciels
 

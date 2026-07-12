@@ -1,9 +1,10 @@
 # tests/reference_fixtures.py
+import json
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from tsm.domain.profile import ExecutionProfile, load_profile
+from tsm.domain.profile import PROFILES_DIR, ExecutionProfile, load_profile
 from tsm.domain.reference import (
     ReferenceScenario,
     compile_authored_graph,
@@ -14,6 +15,7 @@ from tsm.domain.scenario import Position
 from tsm.execution.autonomy import KinematicWaypointFollower
 from tsm.execution.controller import ForceView, RunController
 from tsm.execution.objectives import Objective, ObjectiveStatus, ObjectiveUpdate
+from tsm.execution.white_cell import Verdict, WhiteCell
 from tsm.execution.world import WorldSnapshot, WorldStore
 
 
@@ -176,3 +178,110 @@ def controller_with(scenario: ReferenceScenario) -> RunController:
         white_cell=NoopWhiteCell(),
         transport=FakeTransport(),
         publish_event=lambda _: None)
+
+
+# ── Task 8 : harnais e2e en mémoire (chaîne complète, sans ROS) ───────────────
+
+class InMemoryRuntimeHarness:
+    """Fake transport ET pilote e2e : compose WorldStore, WhiteCell et
+    RunController exactement comme tsm.execution.runtime._main_v3, mais fait
+    avancer le monde par snapshots injectés — aucune navigation physique, aucun
+    import ROS. Il EST le transport (spawn/delete/set_waypoints/stop) donné au
+    contrôleur, ce qui rend spawns, deletes et waypoints directement lisibles."""
+
+    def __init__(self, scenario: ReferenceScenario, profile: ExecutionProfile) -> None:
+        self.spawned_agents: list[str] = []
+        self.deleted: list[str] = []
+        self.spawned_forces: list[str] = []
+        self.waypoints: list[tuple[str, float, float]] = []
+        self.stopped: list[str] = []
+        self._world_store = WorldStore()
+        self._white_cell = WhiteCell(
+            scenario, profile, self._world_store,
+            spawn_force=self._spawn_force,
+            delete_vessel=self.delete_vessel,
+            publish_event=lambda _e: None,
+            stop=lambda reason: self._controller.stop(reason))
+        self._controller = RunController(
+            scenario=scenario, graph=compile_authored_graph(scenario),
+            profile=profile, world_store=self._world_store,
+            white_cell=self._white_cell, transport=self,
+            publish_event=lambda _e: None)
+
+    # ── Surface transport (identique à LotusimClient) ────────────────────────
+
+    def spawn_vessel(self, vessel: str, init_pos: tuple[float, float], model: str,
+                     linear_velocity: Any, angular_velocity_max: float,
+                     heading_deg: float) -> str:
+        self.spawned_agents.append(vessel)
+        return vessel
+
+    def delete_vessel(self, agent: str) -> None:
+        self.deleted.append(agent)
+
+    def set_waypoints(self, agent: str, lat: float, lon: float) -> None:
+        self.waypoints.append((agent, lat, lon))
+
+    def stop_vessel(self, agent: str) -> None:
+        self.stopped.append(agent)
+
+    # ── Callback d'injection de la cellule blanche ───────────────────────────
+
+    def _spawn_force(self, force: str) -> None:
+        self.spawned_forces.append(force)
+        self._controller.spawn_force(force)
+
+    # ── Pilotage e2e ─────────────────────────────────────────────────────────
+
+    def start(self) -> None:
+        # Préflight + spawn des forces initiales : une RunStartError remonte ici,
+        # AVANT tout spawn (le test de profil incompatible en dépend).
+        self._controller.start_initial_forces()
+        # Arme l'horloge de la cellule blanche à t=0 (started_sim_time_s) : sans
+        # ce tick, le premier tick réel fixerait started au sim_time observé et
+        # le timeout serait faussé (test_ormuz_times_out_without_progress).
+        self._controller.tick(self._world_store.snapshot())
+
+    def snapshot(self, sim_time_s: float,
+                 positions: Mapping[str, tuple[float, float]]
+                 ) -> tuple[float, Mapping[str, tuple[float, float]]]:
+        return sim_time_s, positions
+
+    def tick(self, snap: tuple[float, Mapping[str, tuple[float, float]]]) -> None:
+        sim_time_s, positions = snap
+        # Passe par le WorldStore (décision 3) : `destroyed` reste monotone et la
+        # cellule blanche observe le même monde que le contrôleur.
+        self._world_store.update_poses(
+            sim_time_s,
+            {name: Position(lat, lon) for name, (lat, lon) in positions.items()})
+        self._controller.tick(self._world_store.snapshot())
+
+    def destroy(self, agent: str) -> None:
+        self._world_store.mark_destroyed(agent)
+
+    @property
+    def verdict(self) -> Verdict:
+        return self._white_cell._verdict
+
+
+def in_memory_runtime(name: str, profile: str,
+                      remove_capability: tuple[str, str] | None = None
+                      ) -> tuple[InMemoryRuntimeHarness, InMemoryRuntimeHarness]:
+    """(harness, harness) : même objet joué deux fois (pilote + double de vue),
+    pour un dépaquetage `runtime, fake = ...` symétrique. remove_capability
+    retire une capacité du profil avant construction, pour exercer le refus de
+    préflight sans profil fixture dédié."""
+    scenario = load_reference_scenario(name)
+    if remove_capability is None:
+        profile_obj = load_profile(profile)
+    else:
+        agent, capability = remove_capability
+        with open(PROFILES_DIR / f'{profile}.json', encoding='utf-8') as f:
+            doc = json.load(f)
+        for provider_config in doc['agents'][agent]['providers'].values():
+            caps = provider_config.get('capabilities')
+            if caps and capability in caps:
+                provider_config['capabilities'] = [c for c in caps if c != capability]
+        profile_obj = ExecutionProfile.from_dict(doc)
+    harness = InMemoryRuntimeHarness(scenario, profile_obj)
+    return harness, harness

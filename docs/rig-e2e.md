@@ -63,6 +63,46 @@ cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev
 
 IHM : `http://localhost:5173` (console d'opérations) · `http://localhost:8080` (tsm).
 
+## Recette — scénario de référence Escorte Ormuz (v3)
+
+Une fois la stack montée (§Séquence, étapes 0–4), ce scénario prouve la chaîne
+v3 complète sur le rig : cellule blanche, injection de force, adjudication,
+verdict. La même chaîne est vérifiée sans ROS par
+`tests/test_reference_e2e_memory.py` (`uv run pytest`) — le rig ne fait que la
+rejouer avec la navigation physique de gz.
+
+```bash
+# 1. Lancer le run v3 : scénario escorte_ormuz + profil d'exécution kinematic-ormuz.
+#    Depuis l'IHM tsm (:8080, onglet Exécution) : sélectionner « Escorte Ormuz »,
+#    profil « kinematic-ormuz », puis Lancer. Équivalent API :
+curl -s -X POST localhost:8080/api/scenario/escorte_ormuz/launch \
+  -H 'Content-Type: application/json' -d '{"profile": "kinematic-ormuz"}'
+
+# 2. Observer le déroulé (IHM onglet Exécution, ou timeline d'événements) :
+#    - cargo_1 transite vers sortie_ouest ; escorte tient le poste ;
+#    - cargo_1 entre dans passe_ormuz → trigger `embuscade-rouge` → spawn de la
+#      force rouge (vedette_1, vedette_2) ;
+#    - escorte engage vedette_1 → la cellule blanche adjuge (PT2S) → vedette_1
+#      détruite et supprimée ;
+#    - cargo_1 atteint sortie_ouest → verdict `succeeded`.
+
+# 3. Vérifier l'état final et la timeline.
+curl -s localhost:8080/api/run                 # state=finished, verdict=succeeded
+curl -s localhost:8080/api/run/events?since=0  # trigger_fired, objective_succeeded,
+                                               # adjudication, verdict, run_end
+```
+
+Provenance : chaque run écrit `logs/<run_id>/` (inputs figés + `events.jsonl`).
+Contrôle final — `report.json` porte le même verdict et un temps simulé de fin
+strictement supérieur au temps de début :
+
+```bash
+RUN=$(docker exec tsm-e2e bash -lc 'ls -1 /lab/tactical_scenario_maker/logs | tail -1')
+docker exec tsm-e2e bash -lc "cat /lab/tactical_scenario_maker/logs/$RUN/report.json"
+# {"verdict": "succeeded", "reason": null,
+#  "started_sim_time_s": <t0>, "finished_sim_time_s": <t1 > t0>}
+```
+
 ## Teardown
 
 ```bash
