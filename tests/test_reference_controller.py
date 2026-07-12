@@ -258,9 +258,7 @@ def test_casualty_triggers_episodic_replan_of_active_objectives():
     assert first is not None
     controller.tick(snapshot(1, {"cargo_1": (1.2600, 103.7497), "escorte": (1.26, 103.75)},
                              destroyed={"vedette_1"}))
-    assert cargo.active_objective_id is None
-    assert cargo.last_terminal_update.status is ObjectiveStatus.CANCELLED
-    controller.tick(snapshot(2, {"cargo_1": (1.2600, 103.7497), "escorte": (1.26, 103.75)},
-                             destroyed={"vedette_1"}))
+    # Annulation en tete de tick puis replanification au MEME tick : le
+    # superviseur repart immediatement sur un objectif frais.
     assert cargo.active_objective_id is not None
     assert cargo.active_objective_id != first

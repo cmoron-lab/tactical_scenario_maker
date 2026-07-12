@@ -153,20 +153,24 @@ def test_follow_target_m_without_stop_distance_never_self_satisfies():
 # perdue (vedette 8 m/s > escorte 6 m/s, constaté au rig, run r-000004).
 
 def test_escorter_convoi_holds_station_on_convoy_when_no_threat_in_sight():
+    # Station NON bornée : une station plus serrée que le rayon de giration
+    # (v/om = 120 m) ne devient jamais terminale (rig r-000005) — c'est la
+    # replanification sur changement de situation qui fait basculer.
     state = _state({'cargo_1': {'available': True,
                                 'pos': {'lat': 1.2620, 'lon': 103.75}},
                     'escorte': {'available': True,
                                 'pos': {'lat': 1.2600, 'lon': 103.75}}})
     plan = methods.escorter_convoi_m(state, 'escorte')
-    assert plan == [('follow_target', 'escorte', 'cargo_1', 0.0005)]
+    assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
 
-def test_escorter_convoi_idles_at_station_until_threat_appears():
+def test_escorter_convoi_station_never_self_satisfies_even_at_contact():
     state = _state({'cargo_1': {'available': True,
                                 'pos': {'lat': 1.2600, 'lon': 103.75}},
                     'escorte': {'available': True,
-                                'pos': {'lat': 1.2598, 'lon': 103.7497}}})
-    assert methods.escorter_convoi_m(state, 'escorte') == []
+                                'pos': {'lat': 1.2600, 'lon': 103.75}}})
+    plan = methods.escorter_convoi_m(state, 'escorte')
+    assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
 
 def test_escorter_convoi_returns_to_station_after_threat_destroyed():
@@ -176,7 +180,7 @@ def test_escorter_convoi_returns_to_station_after_threat_destroyed():
                     'escorte': {'available': True,
                                 'pos': {'lat': 1.2630, 'lon': 103.7520}}})
     plan = methods.escorter_convoi_m(state, 'escorte')
-    assert plan == [('follow_target', 'escorte', 'cargo_1', 0.0005)]
+    assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
 
 def test_escorter_convoi_inapplicable_without_threat_nor_convoy():

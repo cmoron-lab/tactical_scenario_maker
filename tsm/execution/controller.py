@@ -288,6 +288,7 @@ class RunController:
         self._active_forces: set[str] = set()
         self._stopped = False
         self._seen_destroyed: frozenset[str] = frozenset()
+        self._seen_agents: frozenset[str] | None = None
         self._verdict_published = False
 
     # ── Vue par force ────────────────────────────────────────────────────────
@@ -443,6 +444,24 @@ class RunController:
                                'sim_time_s': world.sim_time_s})
             self.stop(f'verdict:{verdict.value}')
             return
+        # Changement de situation observé (§4.1 « changement d'état observé
+        # significatif », « une injection ») : apparition d'un nouvel agent ou
+        # perte adjugée ⇒ annuler les objectifs actifs AVANT le tour des
+        # superviseurs — ils replanifient au même tick. Sans ça, un suivi non
+        # borné ne devient jamais terminal et bloque à jamais la bascule de
+        # branche doctrinale (escorte qui n'engage pas, vedette_2 qui ne se
+        # replie pas — constaté au rig, runs r-000004/r-000005).
+        # ponytail: détection globale, à scoper par force quand force_scoped
+        # filtrera la perception (incrément 5).
+        if self._seen_agents is None:
+            self._seen_agents = frozenset(world.positions)
+        else:
+            appeared = frozenset(world.positions) - self._seen_agents
+            if appeared or (world.destroyed - self._seen_destroyed):
+                for supervisor in self._supervisors.values():
+                    supervisor.cancel_active(world)
+            self._seen_agents = self._seen_agents | frozenset(world.positions)
+        self._seen_destroyed = world.destroyed
         for force in sorted(self._active_forces):
             view = self.view_for(force, world)
             for agent in self._graph.by_force[force]:
@@ -450,15 +469,6 @@ class RunController:
         for provider in self._provider_instances:
             for update in provider.tick(world):
                 self._route_update(update)
-        if world.destroyed - self._seen_destroyed:
-            # Perte adjugée = nouvelle situation tactique : replanification
-            # épisodique (§4.1 « changement d'état observé significatif »).
-            # Sans annulation, une poursuite non bornée ne devient jamais
-            # terminale et bloque la bascule de branche doctrinale (ex. le
-            # repli de vedette_2 après la perte de vedette_1).
-            for supervisor in self._supervisors.values():
-                supervisor.cancel_active(world)
-        self._seen_destroyed = world.destroyed
 
     def _route_update(self, update: ObjectiveUpdate) -> None:
         # ids globalement uniques (factory partagée) : au plus un superviseur

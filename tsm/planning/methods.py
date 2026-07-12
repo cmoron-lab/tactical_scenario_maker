@@ -467,11 +467,6 @@ def attack_target_m(state: Any, agent: str, target: str) -> list[tuple[Any, ...]
     return [('attack_target', agent, target)]
 
 
-# Poste d'escorte : distance de station sur le convoi, plus large que la
-# portée d'engagement (0.00045) — l'escorte reste entre les deux.
-_STATION_DISTANCE_DEG = 0.0005
-
-
 def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
     follow = follow_target_m(state, agent, 'vedette_1', 0.00045)
     if follow is False:
@@ -479,8 +474,12 @@ def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
         # convoi (§8.2 « station de l'escorte »). Sans cette branche,
         # l'escorte reste au spawn pendant le transit et l'interception
         # devient une chasse arrière perdue (vedette 8 m/s > escorte 6 m/s,
-        # constaté au rig, run r-000004).
-        return follow_target_m(state, agent, 'cargo_1', _STATION_DISTANCE_DEG)
+        # run rig r-000004). Le suivi est NON borné : une station bornée plus
+        # serrée que le rayon de giration (v/ω = 120 m > 55 m) ne devient
+        # jamais terminale (run r-000005) — c'est la replanification sur
+        # changement de situation (controller) qui fait basculer vers
+        # l'engagement quand la menace apparaît.
+        return follow_target_m(state, agent, 'cargo_1', None)
     attack = attack_target_m(state, agent, 'vedette_1')
     if attack is False:
         return False

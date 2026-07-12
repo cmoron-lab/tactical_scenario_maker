@@ -24,7 +24,7 @@
     },
     "escorte": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2600, "lon": 103.7500},
+      "position": {"lat": 1.2596, "lon": 103.7500},
       "mission": {"task": "escorter_convoi", "args": ["escorte"]},
       "conditions": {}
     },
