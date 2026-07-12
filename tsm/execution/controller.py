@@ -313,9 +313,11 @@ class RunController:
         self._preflight_validate()
         initial = sorted(force for force, spec in self._scenario.forces.items()
                          if spec.spawn == 'initial')
-        agents = [agent for force in initial
-                  for agent in sorted(self._graph.by_force[force])]
-        self._purge(agents)
+        # Purge TOUS les noms déclarés (forces différées comprises) : les ids
+        # sont stables entre runs, et une vedette d'un run précédent encore en
+        # scène rendrait le respawn différé invisible au détecteur d'apparition
+        # (constaté au rig, run r-000006).
+        self._purge(sorted(self._scenario.agents))
         for force in initial:
             for agent in sorted(self._graph.by_force[force]):
                 self._spawn(force, agent)
@@ -460,7 +462,10 @@ class RunController:
             if appeared or (world.destroyed - self._seen_destroyed):
                 for supervisor in self._supervisors.values():
                     supervisor.cancel_active(world)
-            self._seen_agents = self._seen_agents | frozenset(world.positions)
+            # Comparaison au tick PRÉCÉDENT, pas une union cumulative : un agent
+            # purgé puis respawné (ids stables) doit re-déclencher l'apparition.
+            # Un faux positif sur trou de trame coûte un replan bénin.
+            self._seen_agents = frozenset(world.positions)
         self._seen_destroyed = world.destroyed
         for force in sorted(self._active_forces):
             view = self.view_for(force, world)

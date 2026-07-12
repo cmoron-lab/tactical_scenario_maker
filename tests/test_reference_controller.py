@@ -262,3 +262,18 @@ def test_casualty_triggers_episodic_replan_of_active_objectives():
     # superviseur repart immediatement sur un objectif frais.
     assert cargo.active_objective_id is not None
     assert cargo.active_objective_id != first
+
+
+def test_preflight_purges_all_declared_agents_including_deferred(monkeypatch):
+    # Une vedette (force différée) d'un run précédent est encore observée :
+    # le préflight doit la purger — ids stables entre runs, sinon son respawn
+    # au trigger serait invisible au détecteur d'apparition (rig r-000006).
+    import tsm.execution.controller as controller_mod
+    from tsm.domain.scenario import Position
+    monkeypatch.setattr(controller_mod, '_PURGE_TIMEOUT_S', 0.05)
+    transport = FakeTransport()
+    controller = _ormuz_controller(transport)
+    controller._world_store.update_poses(1.0, {'vedette_1': Position(1.263, 103.752)})
+    with pytest.raises(RunStartError):
+        controller.start_initial_forces()  # la fake ne retire pas la pose
+    assert 'vedette_1' in transport.deleted
