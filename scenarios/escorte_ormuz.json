@@ -18,7 +18,7 @@
   "agents": {
     "cargo_1": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2598, "lon": 103.7497},
+      "position": {"lat": 1.2598, "lon": 103.7500},
       "mission": {"task": "transiter_vers_zone", "args": ["cargo_1", "sortie_ouest"]},
       "conditions": {}
     },
