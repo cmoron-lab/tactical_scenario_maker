@@ -4,12 +4,15 @@
 **Auteurs** : Cyril Moron (Architecte LOTUSim), à partir des travaux d'Estelle Chauveau (PO LOTUSim)
 **Date** : 2026-07-12
 
-**Documents d'entrée** :
+**Documents de référence** :
 
-- [LSGA Architecture v2](reviews/lsga-architecture-v2.md) (Estelle) — le pipeline de génération ;
-- [Note « Trois niveaux de décision »](reviews/note-lgsa-trois-niveaux-decision.md) (Estelle, 12/07) — le cadre planification / supervision / guidage ;
-- [ARCHITECTURE.md](ARCHITECTURE.md) (tsm) — les décisions D1–D8 et l'architecture cible côté exécution ;
-- [Review LSGA v2](reviews/2026-07-11-review-lsga-v2.md) (Cyril, 11/07) — remarques R1–R7 et cartographie de l'existant.
+- [LSGA Architecture v2](lsga-architecture-v2.md) (Estelle) — le pipeline de génération ;
+- [ARCHITECTURE.md](ARCHITECTURE.md) (tsm) — les décisions D1–D8 et l'architecture cible côté exécution.
+
+Les échanges qui ont mené à ce document — review LSGA v2 (Cyril, 11/07,
+remarques R1–R7) et note « Trois niveaux de décision » (Estelle, 12/07) — sont
+**absorbés ici** ; leur texte intégral reste dans l'historique git
+(`docs/reviews/`, nettoyé le 2026-07-12).
 
 ---
 
@@ -157,8 +160,17 @@ Ce que le modèle multi-forces y change :
 
 ## 4. Niveaux 2 et 3 — l'Execution Environment
 
-*(Chapitre à approfondir dans « Execution Environment — périmètre et contrat »,
-selon les quatre critères d'acceptation de la note du 12/07.)*
+Chapitre à approfondir dans « Execution Environment — périmètre et contrat ».
+Critères d'acceptation posés par la note du 12/07 :
+
+1. distinguer explicitement supervision (niveau 2) et guidage (niveau 3), avec
+   leurs responsabilités respectives — sans reconduire leur fusion actuelle
+   dans tsm ;
+2. spécifier le contrat 2 ↔ 3 en actions typées avec cycle de vie ;
+3. positionner le modèle de données du monitoring par rapport aux
+   *achievements* de la thèse d'Antoine Milot ;
+4. faire figurer le critère d'escalade vers la replanification LSGA (§4.4)
+   comme élément du contrat.
 
 ### 4.1 Supervision (niveau 2)
 
@@ -223,6 +235,17 @@ qu'il ne peut pas.*
 - Réparation locale en échec, ou nouvel objectif hors des tâches acquises →
   **escalade** vers la replanification complète de la force (niveau 1), portée
   par le monitoring de la cellule blanche.
+
+### 4.5 Discipline de vocabulaire
+
+Reprise de la note du 12/07 :
+
+- **replanification** : production d'un nouveau plan symbolique — réservé aux
+  niveaux 1 et 2 ;
+- **réparation locale** : replanification de niveau 2, par agent, sur
+  représentation réduite ;
+- **recalcul de consigne / guidage** : niveau 3, continu, sans planificateur —
+  ce que fait en réalité la boucle à ~2 s de tsm (§4.3).
 
 ## 5. La cellule blanche en détail
 
@@ -348,11 +371,27 @@ réutilisé tel quel.
 
 ## 7. Existant et trajectoire de convergence
 
-Rappel de l'acquis (détail dans la [review du 11/07](reviews/2026-07-11-review-lsga-v2.md) §4) :
-tsm implémente une tranche verticale vérifiée e2e — schéma v1, WAL (prédicats
-calculés), wrapper GTPyhop, exécution, monitoring de run temps réel. Les deltas
-LSGA connus (doctrine-code → HDDL, flux → Execution Graph) restent valides et
-derrière des coutures en place.
+### 7.1 Correspondance LSGA ↔ tsm
+
+tsm implémente une tranche verticale du pipeline, vérifiée e2e dans LOTUSim
+(démo : poursuite multi-agents avec suivi d'exécution temps réel) :
+
+| LSGA | Équivalent tsm | Statut |
+|---|---|---|
+| Scenario Request | Schéma JSON v1 versionné | Implémenté — candidat pour la structure « à définir » (Annexe D LSGA) |
+| Validation | Validation structurelle au chargement | Implémenté (structurel) ; validation métier à spécifier |
+| World Abstraction Layer | `build_state` + `sync_positions`, préconditions calculées | Implémenté — mêmes « prédicats calculés » |
+| Domain HDDL | `knowledge_base.json` + méthodes HTN Python | Implémenté **en code** — delta n°1 : traduction HDDL |
+| Planning Engine Wrapper | Classe `Planner` (GTPyhop confiné, substituable) | Implémenté |
+| Raw Planning Result | Plan GTPyhop (transitoire, jamais exposé) | Implémenté |
+| EAL / Execution Graph | `make_commands` + runner | Implémenté en **flux** — delta n°2 : artefact versionnable |
+| Execution Environment | gz/WaypointFollower + boucle exécutive par agent | Implémenté — fusion N2/N3 à résorber (§4.3) |
+| Monitoring d'exécution | Journal d'événements, cycle de vie du run, IHM temps réel | Implémenté — à rattacher à la cellule blanche (§2.2) |
+
+Les deux deltas LSGA restent derrière des coutures en place (doctrine derrière
+un store dédié, commandes derrière le runner) — résorbables par incréments.
+
+### 7.2 Incréments
 
 Incréments proposés, chacun petit et validé sur le scénario de référence :
 
