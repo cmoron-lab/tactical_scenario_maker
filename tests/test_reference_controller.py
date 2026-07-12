@@ -7,6 +7,7 @@ from tests.reference_fixtures import (
     NoopWhiteCell,
     StaticPlanner,
     controller_with,
+    ormuz_profile,
     ormuz_scenario,
     profile_for_scenario,
     scenario_forces,
@@ -16,6 +17,7 @@ from tests.reference_fixtures import (
 from tsm.domain.reference import compile_authored_graph
 from tsm.execution.controller import MissionSupervisor, RunController, RunStartError
 from tsm.execution.objectives import ObjectiveFactory, ObjectiveStatus
+from tsm.execution.white_cell import WhiteCell
 from tsm.execution.world import WorldStore
 
 
@@ -183,3 +185,35 @@ def _ormuz_controller(transport=None):
         profile=profile_for_scenario(scenario), world_store=WorldStore(),
         white_cell=NoopWhiteCell(), transport=transport or FakeTransport(),
         publish_event=lambda _: None)
+
+
+# ── Task 6 : réaction du contrôleur au verdict de la cellule blanche ──────────
+
+def test_terminal_verdict_publishes_verdict_event_and_neutralizes_ticks():
+    scenario = ormuz_scenario(timeout="PT5S")
+    store = WorldStore()
+    transport = FakeTransport()
+    events = []
+    holder = {}
+    cell = WhiteCell(
+        scenario, ormuz_profile(), store,
+        spawn_force=lambda force: holder["c"].spawn_force(force),
+        delete_vessel=transport.delete_vessel,
+        publish_event=lambda _e: None,
+        stop=lambda reason: holder["c"].stop(reason))
+    controller = RunController(
+        scenario=scenario, graph=compile_authored_graph(scenario),
+        profile=ormuz_profile(), world_store=store,
+        white_cell=cell, transport=transport, publish_event=events.append)
+    holder["c"] = controller
+    controller.start_initial_forces()
+    running = snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)})
+    controller.tick(running)
+    assert transport.waypoints  # le run tourne : des waypoints ont été émis
+    assert not any(e.get("type") == "verdict" for e in events)
+    controller.tick(snapshot(5.0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    count = len(transport.waypoints)
+    assert any(e.get("type") == "verdict" and e["verdict"] == "timed_out" for e in events)
+    assert any(e.get("type") == "run_stop" for e in events)
+    controller.tick(snapshot(6.0, {"cargo_1": (1.2599, 103.7497), "escorte": (1.26, 103.75)}))
+    assert len(transport.waypoints) == count  # tick neutralisé après le verdict

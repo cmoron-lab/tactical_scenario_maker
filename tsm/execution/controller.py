@@ -32,13 +32,14 @@ from tsm.domain import doctrine
 from tsm.domain.profile import ExecutionProfile, ProfileError, validate_profile
 from tsm.domain.reference import ExecutionGraph, ReferenceScenario
 from tsm.execution.actions import attack_target, follow_target, goto
-from tsm.execution.autonomy import KinematicWaypointFollower
+from tsm.execution.autonomy import AdjudicatedEngagementProvider, KinematicWaypointFollower
 from tsm.execution.objectives import (
     Objective,
     ObjectiveFactory,
     ObjectiveStatus,
     ObjectiveUpdate,
 )
+from tsm.execution.white_cell import Verdict
 from tsm.execution.world import WorldSnapshot, WorldStore
 from tsm.planning.planner import Planner
 from tsm.vendor import gtpyhop
@@ -270,9 +271,17 @@ class RunController:
             'navigation.follow_target': self._waypoint_follower,
         }
         self._provider_instances: list[_Provider] = [self._waypoint_follower]
+        # engage.attack_target est arbitré par la cellule blanche : on ne câble
+        # l'adaptateur que si le white_cell sait adjuger (le NoopWhiteCell des
+        # tests de contrôleur ne l'expose pas, et ne doit pas être tické ainsi).
+        if hasattr(white_cell, 'submit_attack'):
+            engagement = AdjudicatedEngagementProvider(white_cell)
+            self._provider_impls['engage.attack_target'] = engagement
+            self._provider_instances.append(engagement)
         self._supervisors: dict[tuple[str, str], MissionSupervisor] = {}
         self._active_forces: set[str] = set()
         self._stopped = False
+        self._verdict_published = False
 
     # ── Vue par force ────────────────────────────────────────────────────────
 
@@ -413,7 +422,18 @@ class RunController:
     def tick(self, world: WorldSnapshot) -> None:
         if self._stopped:
             return
-        self._white_cell.tick(world)
+        # La cellule blanche joue en PREMIER : ses complétions d'attaque sont
+        # ainsi drainées par l'adaptateur d'engagement dans la boucle de
+        # providers du MÊME tick. Un verdict terminal arrête le run (décision 2 ;
+        # NoopWhiteCell renvoie None, traité comme PENDING).
+        verdict = self._white_cell.tick(world)
+        if verdict is not None and verdict is not Verdict.PENDING:
+            if not self._verdict_published:
+                self._verdict_published = True
+                self._publish({'type': 'verdict', 'verdict': verdict.value,
+                               'sim_time_s': world.sim_time_s})
+            self.stop(f'verdict:{verdict.value}')
+            return
         for force in sorted(self._active_forces):
             view = self.view_for(force, world)
             for agent in self._graph.by_force[force]:

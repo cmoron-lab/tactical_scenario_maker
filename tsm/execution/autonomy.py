@@ -24,6 +24,35 @@ class _Transport(Protocol):
     def stop_vessel(self, agent: str) -> None: ...
 
 
+class _WhiteCell(Protocol):
+    def submit_attack(self, objective: Objective, world: WorldSnapshot) -> ObjectiveUpdate: ...
+    def cancel_attack(self, objective_id: str, world: WorldSnapshot) -> ObjectiveUpdate: ...
+    def drain_attack_updates(self) -> list[ObjectiveUpdate]: ...
+
+
+class AdjudicatedEngagementProvider:
+    """Provider d'engagement arbitré : même protocole que
+    KinematicWaypointFollower (submit/tick/cancel), mais toute la décision vit
+    dans la cellule blanche (seule vue de dieu légitime). submit délègue
+    l'adjudication ; tick draine les complétions que la cellule a produites lors
+    de son propre tick (joué AVANT la boucle de providers dans le contrôleur, de
+    sorte que succeeded est routé dans le même tick)."""
+
+    capabilities = frozenset({"engage.attack_target"})
+
+    def __init__(self, white_cell: _WhiteCell) -> None:
+        self._white_cell = white_cell
+
+    def submit(self, objective: Objective, world: WorldSnapshot) -> ObjectiveUpdate:
+        return self._white_cell.submit_attack(objective, world)
+
+    def tick(self, world: WorldSnapshot) -> list[ObjectiveUpdate]:
+        return self._white_cell.drain_attack_updates()
+
+    def cancel(self, objective_id: str, world: WorldSnapshot) -> ObjectiveUpdate:
+        return self._white_cell.cancel_attack(objective_id, world)
+
+
 @dataclass
 class _ActiveGoal:
     objective: Objective
