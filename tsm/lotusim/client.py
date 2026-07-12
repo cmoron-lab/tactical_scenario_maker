@@ -3,7 +3,7 @@
 Possède le nœud et son executor ; expose le spawn, l'envoi de waypoints et
 l'observation des poses avec réveil sur changement réel (wake-on-change).
 C'est la couture où se brancheront les autonomies de l'architecture cible
-(ARCHITECTURE.md §7.6).
+(docs/lsga-architecture-v3.md §4.2).
 """
 from __future__ import annotations
 

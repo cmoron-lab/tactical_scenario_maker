@@ -3,7 +3,7 @@
 Créateur et exécuteur de scénarios tactiques pour LOTUSim (POC).
 Décrit des agents et leurs missions, les décompose en HTN (GTPyhop),
 envoie des waypoints au WaypointFollower de LOTUSim et replanifie sur
-les positions observées. Architecture cible : docs/ARCHITECTURE.md.
+les positions observées. Architecture cible : docs/lsga-architecture-v3.md.
 
 ## Lancer
 
@@ -32,12 +32,12 @@ teardown, pièges) : `docs/rig-e2e.md`.
 
 ## Structure
 
-| Répertoire | Rôle | Composant logique (ARCHITECTURE.md §7) |
+| Répertoire | Rôle | Composant logique (lsga-architecture-v3.md) |
 |---|---|---|
-| tsm/domain/ | schéma de scénario v1, doctrine HTN, géométrie | Domaine tactique |
-| tsm/planning/ | Planner (GTPyhop confiné), méthodes HTN | Domaine tactique |
-| tsm/execution/ | actions/commands, boucle agent, assemblage | Exécutif de mission (embryon) |
-| tsm/lotusim/ | adaptateur ROS (seule frontière de transport ROS ; runtime.py importe aussi rclpy pour init/shutdown) | Frontière LOTUSim / future autonomie |
+| tsm/domain/ | schéma de scénario v1, doctrine HTN, géométrie | Domaine doctrinal (niveau 1) |
+| tsm/planning/ | Planner (GTPyhop confiné), méthodes HTN | Planning Engine Wrapper |
+| tsm/execution/ | actions/commands, boucle agent, assemblage | Exécutif de mission / supervision (niveau 2) |
+| tsm/lotusim/ | adaptateur ROS (seule frontière de transport ROS ; runtime.py importe aussi rclpy pour init/shutdown) | Frontière LOTUSim / future autonomie (niveau 3) |
 | tsm/web/ | API HTTP locale | Éditeur tactique (provisoire) |
 | scenarios/ | scénarios JSON v1 (l'identité = le nom de fichier) |  |
 | doctrine/ | knowledge_base.json — la doctrine HTN |  |
