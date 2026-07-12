@@ -440,6 +440,13 @@ def goto_m(state: Any, agent: str, zone_name: str) -> list[tuple[Any, ...]] | bo
     if zone is None:
         return False
     lat, lon, radius = zone
+    # Zone atteinte ⇒ décomposition vide (même logique que follow_target_m à
+    # poste tenu) : sinon le superviseur resoumet un goto instantanément
+    # réussi à chaque tick — spam à 5 Hz constaté au rig (r-000008) une fois
+    # vedette_2 arrivée au point de repli.
+    pos = state.agents.get(agent, {}).get('pos')
+    if pos and distance_deg(pos, {'lat': lat, 'lon': lon}) <= radius:
+        return []
     return [('goto', agent, (lat, lon), radius)]
 
 

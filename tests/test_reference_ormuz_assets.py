@@ -185,3 +185,15 @@ def test_escorter_convoi_returns_to_station_after_threat_destroyed():
 
 def test_escorter_convoi_inapplicable_without_threat_nor_convoy():
     assert methods.escorter_convoi_m(_state({}), 'escorte') is False
+
+
+def test_goto_self_satisfies_once_inside_the_zone():
+    # Arrivé au point de repli, un goto réémis à chaque tick spammerait la
+    # timeline à 5 Hz (rig r-000008) : zone atteinte ⇒ décomposition vide.
+    state = _state({'vedette_2': {'available': True,
+                                  'pos': {'lat': 1.2630, 'lon': 103.7560}}})
+    assert methods.goto_m(state, 'vedette_2', 'repli_nord') == []
+    state = _state({'vedette_2': {'available': True,
+                                  'pos': {'lat': 1.2632, 'lon': 103.7530}}})
+    assert methods.goto_m(state, 'vedette_2', 'repli_nord') == [
+        ('goto', 'vedette_2', (1.2630, 103.7560), 0.00015)]
