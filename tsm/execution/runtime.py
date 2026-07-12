@@ -147,6 +147,13 @@ def _publish_event_factory(logs: RunLogs, run_result: dict[str, Any]) -> Any:
 
     def publish_event(event: Any) -> None:
         if isinstance(event, WhiteCellEvent):
+            # Le verdict terminal est publié DEUX fois le même tick :
+            # WhiteCell._finish (WhiteCellEvent) puis RunController.tick (dict
+            # {'type': 'verdict', verdict + reason + sim_time_s} — celui qui
+            # alimente run_result). Le dict du contrôleur est canonique : on
+            # saute celui-ci pour n'avoir qu'UNE ligne verdict dans events.jsonl.
+            if event.kind == 'verdict':
+                return
             payload = dataclasses.asdict(event)  # décision 6 : conversion à la frontière
             logs.log_event(payload['kind'], sim_time_s=payload['sim_time_s'], **payload['fields'])
             return

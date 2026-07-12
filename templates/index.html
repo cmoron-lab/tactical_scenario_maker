@@ -1583,7 +1583,10 @@ function updateRunBadge() {
 function updateLaunchButtonState() {
   const btn = document.querySelector('.btn-launch');
   if (!btn) return;
-  btn.disabled = runStatus.state === 'running';
+  // data-profiles="pending" : bouton v2 dont le select de profils n'est pas
+  // encore peuplé (GET /api/profiles en vol) — reste grisé quel que soit l'état
+  // du run, sinon le pollTick le réactiverait avant l'arrivée des profils.
+  btn.disabled = runStatus.state === 'running' || btn.dataset.profiles === 'pending';
   btn.title = runStatus.state === 'running' ? 'Un run est déjà en cours' : '';
 }
 
@@ -2027,9 +2030,9 @@ function renderReadOnlyScenario(name, doc) {
       <div class="exec-card-body">
         <div class="field">
           <label>Profil d'exécution</label>
-          <select id="profile-select"><option>Chargement…</option></select>
+          <select id="profile-select" disabled><option value="">Chargement…</option></select>
         </div>
-        <button class="btn btn-launch" style="margin-top:14px" onclick="launchScenarioV2('${name}')">▶ Lancer sur Lotusim</button>
+        <button class="btn btn-launch" data-profiles="pending" disabled style="margin-top:14px" onclick="launchScenarioV2('${name}')">▶ Lancer sur Lotusim</button>
       </div>
     </div>
     <div id="launch-status"></div>
@@ -2040,6 +2043,12 @@ function renderReadOnlyScenario(name, doc) {
     sel.innerHTML = names.length
       ? names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
       : '<option value="">Aucun profil disponible</option>';
+    if (names.length) {
+      sel.disabled = false;
+      const btn = document.querySelector('.btn-launch');
+      if (btn) delete btn.dataset.profiles;
+      updateLaunchButtonState();  // relâche le bouton maintenant que le select est peuplé
+    }
   });
   updateLaunchButtonState();
 }

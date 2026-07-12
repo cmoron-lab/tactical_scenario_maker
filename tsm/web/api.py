@@ -74,6 +74,10 @@ class Api:
             if profile is None:
                 raise ScenarioError(
                     f"le scénario {name!r} (v2) nécessite un profil d'exécution")
+            if profile not in list_profiles():
+                # sinon le sous-processus mourrait avant create_run_directory :
+                # run failed sans run_id ni verdict — refus AVANT le spawn.
+                raise ScenarioError(f'profil inconnu: {profile!r}')
         else:
             load_scenario(name)
             if profile is not None:

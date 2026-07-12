@@ -238,14 +238,16 @@ def test_relaunch_resets_verdict_from_previous_run(tmp_path):
 
 
 def test_status_reads_verdict_lazily_from_report_json_once_process_exited(tmp_path):
+    rm = RunManager(cmd=EXIT_3, logs_dir=tmp_path)
+    rm.launch('escorte_ormuz', profile='kinematic-ormuz')
+    # le sous-processus crée SON répertoire APRÈS le launch (clôture de
+    # propriété : seul un id postérieur au launch est adoptable) — simulé ici
     run_dir = tmp_path / 'r-000001'
     run_dir.mkdir()
     (run_dir / 'report.json').write_text(json.dumps({
         'verdict': 'failed', 'reason': 'agent_destroyed',
         'started_sim_time_s': 0.0, 'finished_sim_time_s': 12.0,
     }))
-    rm = RunManager(cmd=EXIT_3, logs_dir=tmp_path)
-    rm.launch('escorte_ormuz', profile='kinematic-ormuz')
     _wait_until(lambda: rm.status()['state'] != 'running')
     status = rm.status()
     assert status['state'] == 'failed'  # état processus (EXIT_3 → rc=3)
@@ -255,22 +257,44 @@ def test_status_reads_verdict_lazily_from_report_json_once_process_exited(tmp_pa
 
 
 def test_events_and_poses_are_read_from_the_run_id_subdirectory_once_known(tmp_path):
-    run_dir = tmp_path / 'r-000001'
-    run_dir.mkdir()
-    (run_dir / 'events.jsonl').write_text(json.dumps({'kind': 'run_start'}) + '\n')
-    (run_dir / 'poses.csv').write_text('timestamp,agent,lat,lon\n0.0,usv,1.0,103.0\n')
-    # fichiers plats (legacy) laissés en place : ne doivent pas être lus une
-    # fois qu'un run_id v3 est connu — sinon on afficherait un run périmé.
+    # fichiers plats (legacy) : ne doivent pas être lus une fois qu'un run_id
+    # v3 est connu — sinon on afficherait un run périmé.
     (tmp_path / 'events.jsonl').write_text(json.dumps({'kind': 'stale'}) + '\n')
 
     rm = RunManager(cmd=SLEEP_30, logs_dir=tmp_path)
     rm.launch('escorte_ormuz', profile='kinematic-ormuz')
     try:
+        # répertoire créé par le sous-processus APRÈS le launch (clôture de propriété)
+        run_dir = tmp_path / 'r-000001'
+        run_dir.mkdir()
+        (run_dir / 'events.jsonl').write_text(json.dumps({'kind': 'run_start'}) + '\n')
+        (run_dir / 'poses.csv').write_text('timestamp,agent,lat,lon\n0.0,usv,1.0,103.0\n')
         events = rm.events_since(0)
         assert [e['kind'] for e in events['events']] == ['run_start']
         assert rm.poses()['agents']['usv']['lat'] == 1.0
     finally:
         rm.stop()
+
+
+def test_status_never_adopts_a_previous_runs_verdict(tmp_path):
+    # run 1 : a laissé son répertoire et un verdict succeeded
+    old_dir = tmp_path / 'r-000001'
+    old_dir.mkdir()
+    (old_dir / 'report.json').write_text(json.dumps({
+        'verdict': 'succeeded', 'reason': 'all_in_zone',
+        'started_sim_time_s': 0.0, 'finished_sim_time_s': 60.0,
+    }))
+    # run 2 : meurt AVANT create_run_directory (ex. profil introuvable) —
+    # aucun nouveau répertoire. Son échec ne doit JAMAIS hériter du verdict
+    # du run 1 (clôture de propriété dans _discover_run_id).
+    rm = RunManager(cmd=EXIT_3, logs_dir=tmp_path)
+    rm.launch('escorte_ormuz', profile='inexistant')
+    _wait_until(lambda: rm.status()['state'] != 'running')
+    status = rm.status()
+    assert status['state'] == 'failed'
+    assert status['verdict'] == 'pending'
+    assert status['verdict_reason'] is None
+    assert status['run_id'] is None
 
 
 # ── CLI (main.py) : erreurs claires avant tout import ROS ────────────────────

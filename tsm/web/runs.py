@@ -147,6 +147,7 @@ class RunManager:
         self._agents: dict[str, dict[str, Any]] = {}
         self._profile: str | None = None
         self._run_id: str | None = None
+        self._run_id_floor = ''  # plus haut run id PRÉ-EXISTANT au launch (clôture de propriété)
         self._verdict: str | None = None
         self._verdict_reason: str | None = None
 
@@ -158,6 +159,13 @@ class RunManager:
         if self._log_f is not None:
             self._log_f.close()
         self._logs_dir.mkdir(parents=True, exist_ok=True)
+        # Clôture de propriété, relevée AVANT le spawn : _discover_run_id ne
+        # pourra adopter qu'un id STRICTEMENT supérieur — un enfant qui meurt
+        # avant create_run_directory laisse run_id à None (et le verdict à
+        # pending), au lieu d'adopter le répertoire d'un run antérieur.
+        self._run_id_floor = max(
+            (p.name for p in self._logs_dir.glob('r-*') if _RUN_ID_RE.match(p.name)),
+            default='')
         self._log_f = open(self._logs_dir / 'run.log', 'wb')
         self._proc = subprocess.Popen(self._cmd(name, profile), cwd=REPO_ROOT,
                                        stdout=self._log_f, stderr=subprocess.STDOUT)
@@ -199,20 +207,20 @@ class RunManager:
         # ponytail: le run_id n'est pas transmis au sous-processus (l'argv est
         # fixé par la spec : [python, main.py, name, --profile, profile]) — on
         # le déduit du dernier répertoire r-* créé sous logs_dir, mémorisé une
-        # fois trouvé. RunBusyError interdit les runs concurrents, donc la
-        # seule fenêtre où ça pointerait vers le run PRÉCÉDENT est le court
-        # instant entre le spawn et la création du répertoire par le runtime
-        # v3 — upgrade si ça devient gênant : faire écrire le run_id découvert
-        # dans un fichier connu (logs_dir/current_run_id) par le runtime lui-même.
+        # fois trouvé. Clôture de propriété : seuls les ids STRICTEMENT
+        # supérieurs à _run_id_floor (relevé au launch, avant le spawn) sont
+        # adoptables — le format zero-paddé r-%06d rend la comparaison
+        # lexicographique correcte. Un enfant mort avant create_run_directory
+        # ⇒ run_id reste None, jamais le répertoire d'un run antérieur.
         if self._profile is None:
             return None
         if self._run_id is not None:
             return self._run_id
         candidates = sorted(
-            (p for p in self._logs_dir.glob('r-*') if _RUN_ID_RE.match(p.name)),
-            key=lambda p: p.name)
+            p.name for p in self._logs_dir.glob('r-*')
+            if _RUN_ID_RE.match(p.name) and p.name > self._run_id_floor)
         if candidates:
-            self._run_id = candidates[-1].name
+            self._run_id = candidates[-1]
         return self._run_id
 
     def read_artifact(self, run_id: str, kind: str) -> dict[str, Any]:

@@ -135,6 +135,22 @@ def test_launch_v1_scenario_with_profile_is_400(tmp_path):
         srv.shutdown()
 
 
+def test_launch_v2_scenario_with_unknown_profile_is_400(tmp_path):
+    # refus AVANT spawn : sinon le sous-processus mourrait avant
+    # create_run_directory et le run resterait sans run_id ni verdict.
+    srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    conn = HTTPConnection('127.0.0.1', port)
+    try:
+        status, resp = _post(conn, '/api/scenario/escorte_ormuz/launch',
+                             {'profile': 'inexistant'})
+        assert status == 400
+        assert 'profil inconnu' in resp['error']
+    finally:
+        srv.shutdown()
+
+
 def test_launch_v2_scenario_with_profile_spawns_with_profile_flag(tmp_path):
     seen = {}
 
