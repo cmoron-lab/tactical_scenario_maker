@@ -24,10 +24,10 @@ from tsm.domain.profile import PROFILES_DIR, load_profile
 from tsm.domain.reference import compile_authored_graph, load_reference_scenario
 from tsm.domain.scenario import load_scenario
 from tsm.execution.actions import aller_a, creation_agent, make_commands
-from tsm.execution.controller import RunController
+from tsm.execution.controller import RunController, RunStartError
 from tsm.execution.runner import RunLogs, run_agent
 from tsm.execution.white_cell import WhiteCell, WhiteCellEvent
-from tsm.execution.world import WorldStore
+from tsm.execution.world import WorldStore, wait_first_observation
 from tsm.lotusim.client import LotusimClient
 from tsm.planning import methods
 from tsm.planning.planner import Planner, build_state
@@ -219,6 +219,9 @@ def _main_v3(scenario_name: str, profile_name: str) -> None:
 
         logs.log_event('run_start', scenario=scenario_name, profile=profile_name,
                        agents=list(scenario.agents))
+        if not wait_first_observation(world_store, wake, timeout_s=10.0):
+            raise RunStartError(
+                'aucune observation du monde reçue (poses LOTUSim indisponibles)')
         controller.start_initial_forces()
         started_sim_time_s = world_store.snapshot().sim_time_s
 

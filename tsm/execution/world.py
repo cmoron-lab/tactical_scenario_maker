@@ -55,3 +55,18 @@ class WorldStore:
                 positions=MappingProxyType(dict(self._positions)),
                 destroyed=frozenset(self._destroyed),
             )
+
+
+def wait_first_observation(store: WorldStore, wake: threading.Event,
+                           timeout_s: float) -> bool:
+    """Attend la première observation du monde (revision > 0) avant le préflight.
+
+    Sans elle, la purge préflight court sur un WorldStore vide et ne voit pas
+    les navires d'un run précédent encore en scène — le spawn rend alors un nom
+    canonique différent (ex. 'escorte_0') et le run échoue. `wake` est signalé
+    par le callback de poses APRÈS update_poses : signalé ⇒ revision ≥ 1."""
+    if store.snapshot().revision > 0:
+        return True
+    if wake.wait(timeout=timeout_s):
+        return True
+    return store.snapshot().revision > 0
