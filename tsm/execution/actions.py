@@ -42,6 +42,30 @@ def creation_agent(state, agent, drone):
     return state
 
 
+# ── Primitives v3 (Escorte d'Ormuz) ──────────────────────────────────────────
+#
+# Actions pures : elles existent uniquement pour que GTPyhop valide un plan
+# (elles doivent être dans current_domain._action_dict pour que le tuple
+# primitif termine la décomposition — cf. tsm.vendor.gtpyhop.seek_plan, qui
+# vérifie l'action AVANT les méthodes de tâche). Elles ne touchent ni pose ni
+# transport : la traduction réelle (LOTUSim, adjudication) vit dans le
+# superviseur de Task 5.
+
+def goto(state: Any, agent: str, position: Any, arrival_radius_deg: float) -> Any:
+    """Action pure v3 : aucune mutation, le superviseur traduit le déplacement."""
+    return state
+
+
+def follow_target(state: Any, agent: str, target: str, stop_distance_deg: float | None) -> Any:
+    """Action pure v3 : aucune mutation, le superviseur traduit le suivi."""
+    return state
+
+
+def attack_target(state: Any, agent: str, target: str) -> Any:
+    """Action pure v3 : aucune mutation, le superviseur traduit l'engagement."""
+    return state
+
+
 def make_commands(client: Any, logs: Any) -> tuple[Any, ...]:
     def c_aller_a(state: Any, agent: str, pos: Any) -> Any:
         """Command : envoie le waypoint à LOTUSim et met à jour le state."""

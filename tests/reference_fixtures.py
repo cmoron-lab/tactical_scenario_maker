@@ -1,9 +1,10 @@
 # tests/reference_fixtures.py
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
-from tsm.domain.profile import ExecutionProfile
-from tsm.domain.reference import ReferenceScenario
+from tsm.domain.profile import ExecutionProfile, load_profile
+from tsm.domain.reference import ReferenceScenario, load_reference_scenario, parse_duration
 from tsm.domain.scenario import Position
 from tsm.execution.autonomy import KinematicWaypointFollower
 from tsm.execution.objectives import Objective
@@ -70,3 +71,14 @@ class FakeTransport:
 def kinematic_provider() -> tuple[KinematicWaypointFollower, FakeTransport]:
     transport = FakeTransport()
     return KinematicWaypointFollower(transport), transport
+
+
+def ormuz_scenario(timeout: str | None = None) -> ReferenceScenario:
+    scenario = load_reference_scenario("escorte_ormuz")
+    if timeout is None:
+        return scenario
+    return replace(scenario, end=replace(scenario.end, timeout_s=parse_duration(timeout)))
+
+
+def ormuz_profile() -> ExecutionProfile:
+    return load_profile("kinematic-ormuz")

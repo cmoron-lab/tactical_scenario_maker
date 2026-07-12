@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "name": "kinematic-ormuz",
+  "agents": {
+    "cargo_1": {
+      "fidelity": "kinematic",
+      "providers": {
+        "lotusim.waypoint_follower": {"capabilities": ["navigation.goto"]}
+      },
+      "spawn": {
+        "model": "wamv", "linear_velocity": [0.0, 5.0],
+        "angular_velocity_max": 0.05, "heading_deg": 270.0
+      }
+    },
+    "escorte": {
+      "fidelity": "kinematic",
+      "providers": {
+        "lotusim.waypoint_follower": {"capabilities": ["navigation.follow_target"]},
+        "adjudicated": {"capabilities": ["engage.attack_target"], "range_deg": 0.00045, "duration": "PT2S"}
+      },
+      "spawn": {
+        "model": "wamv", "linear_velocity": [0.0, 6.0],
+        "angular_velocity_max": 0.06, "heading_deg": 270.0
+      }
+    },
+    "vedette_1": {
+      "fidelity": "kinematic",
+      "providers": {
+        "lotusim.waypoint_follower": {"capabilities": ["navigation.goto", "navigation.follow_target"]}
+      },
+      "spawn": {
+        "model": "wamv", "linear_velocity": [0.0, 8.0],
+        "angular_velocity_max": 0.08, "heading_deg": 180.0
+      }
+    },
+    "vedette_2": {
+      "fidelity": "kinematic",
+      "providers": {
+        "lotusim.waypoint_follower": {"capabilities": ["navigation.goto", "navigation.follow_target"]}
+      },
+      "spawn": {
+        "model": "wamv", "linear_velocity": [0.0, 8.0],
+        "angular_velocity_max": 0.08, "heading_deg": 180.0
+      }
+    }
+  }
+}

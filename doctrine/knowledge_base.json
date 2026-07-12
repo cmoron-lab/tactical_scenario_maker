@@ -397,11 +397,39 @@
         "agent",
         "agent"
       ]
+    },
+    "transiter_vers_zone": {
+      "label": "Doctrine Ormuz v3 : transiter vers une zone nomm\u00e9e (goto)",
+      "args": [
+        "agent",
+        "zone"
+      ]
+    },
+    "poursuivre_cargo": {
+      "label": "Doctrine Ormuz v3 : poursuivre cargo_1 (follow_target, sans stop_distance)",
+      "args": [
+        "agent"
+      ]
+    },
+    "escorter_convoi": {
+      "label": "Doctrine Ormuz v3 : escorter le convoi (follow_target puis attack_target sur vedette_1)",
+      "args": [
+        "agent"
+      ]
+    },
+    "repli_apres_perte": {
+      "label": "Doctrine Ormuz v3 : repli vers repli_nord si vedette_1 d\u00e9truite, sinon poursuivre_cargo",
+      "args": [
+        "agent"
+      ]
     }
   },
   "primitive_actions": {
     "aller_a": "Envoyer waypoint (ROS)",
     "creation_agent": "Activer le drone compagnon (marqueur d'\u00e9tat, pas un vrai spawn ROS)",
-    "spawn_vessel": "Spawner un agent (ROS)"
+    "spawn_vessel": "Spawner un agent (ROS)",
+    "goto": "Primitive v3 : d\u00e9placement vers une position (pure, traduite par le superviseur Task 5)",
+    "follow_target": "Primitive v3 : suivi d'une cible (pure, traduite par le superviseur Task 5)",
+    "attack_target": "Primitive v3 : engagement d'une cible (pure, traduite par le superviseur Task 5)"
   }
 }

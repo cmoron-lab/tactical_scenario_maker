@@ -412,6 +412,70 @@ def interposer_m(state, agent, threat, protege):
     return [('aller_a', agent, pos)]
 
 
+# ── Doctrine v3 (Escorte d'Ormuz) — feuilles émettant les primitives ─────────
+#
+# goto/follow_target/attack_target sont des ACTIONS pures (tsm/execution/
+# actions.py), pas des tâches : seek_plan vérifie current_domain._action_dict
+# AVANT _task_method_dict (tsm/vendor/gtpyhop.py), donc un tuple ('goto', ...)
+# émis ici devient directement le pas terminal du plan — jamais re-décomposé.
+# Contrairement aux feuilles legacy ci-dessus (résolution générique par
+# token), ce premier scénario nomme ses cibles/zones en dur (cargo_1,
+# vedette_1, repli_nord...) : mono-cargo, mono-menace, pas de détection
+# générique à ce stade (cf. plan v3, décision de contrôleur #3/#4).
+
+# ponytail: positions figées, dupliquées depuis scenarios/escorte_ormuz.json —
+# le state GTPyhop v3 ne porte pas encore les zones du scénario. À réviser si
+# le superviseur (Task 5) finit par exposer scenario.zones dans le state.
+_ORMUZ_ZONES = {
+    'sortie_ouest': (1.2670, 103.7500, 0.00015),
+    'repli_nord': (1.2630, 103.7560, 0.00015),
+}
+
+
+def goto_m(state: Any, agent: str, zone_name: str) -> list[tuple[Any, ...]] | bool:
+    zone = _ORMUZ_ZONES.get(zone_name)
+    if zone is None:
+        return False
+    lat, lon, radius = zone
+    return [('goto', agent, (lat, lon), radius)]
+
+
+def follow_target_m(state: Any, agent: str, target: str,
+                    stop_distance_deg: float | None = None) -> list[tuple[Any, ...]] | bool:
+    if target not in state.agents or not state.agents[target].get("available", True):
+        return False
+    return [("follow_target", agent, target, stop_distance_deg)]
+
+
+def attack_target_m(state: Any, agent: str, target: str) -> list[tuple[Any, ...]] | bool:
+    if target not in state.agents or not state.agents[target].get('available', True):
+        return False
+    return [('attack_target', agent, target)]
+
+
+def poursuivre_cargo_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
+    return follow_target_m(state, agent, 'cargo_1')
+
+
+def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
+    follow = follow_target_m(state, agent, 'vedette_1', 0.00045)
+    if follow is False:
+        return False
+    attack = attack_target_m(state, agent, 'vedette_1')
+    if attack is False:
+        return False
+    return follow + attack
+
+
+def repli_apres_perte_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
+    """Repli vers repli_nord si vedette_1 est détruite, sinon poursuite du
+    cargo — même convention d'état que follow_target_m (`available: False`
+    marque une destruction, cf. tsm/domain/conditions.py::agent_destroyed)."""
+    if not state.agents.get('vedette_1', {}).get('available', True):
+        return goto_m(state, agent, 'repli_nord')
+    return poursuivre_cargo_m(state, agent)
+
+
 def register_builtin() -> None:
     """Déclare les méthodes feuilles dans gtpyhop.current_domain."""
     gtpyhop.declare_task_methods('aller_a_agent', aller_a_agent_m)
@@ -420,6 +484,10 @@ def register_builtin() -> None:
     gtpyhop.declare_task_methods('aller_a_position', aller_a_position_m)
     gtpyhop.declare_task_methods('orbiter', orbiter_m)
     gtpyhop.declare_task_methods('interposer', interposer_m)
+    gtpyhop.declare_task_methods('transiter_vers_zone', goto_m)
+    gtpyhop.declare_task_methods('poursuivre_cargo', poursuivre_cargo_m)
+    gtpyhop.declare_task_methods('escorter_convoi', escorter_convoi_m)
+    gtpyhop.declare_task_methods('repli_apres_perte', repli_apres_perte_m)
 
 
 def register_kb(kb: dict[str, Any]) -> None:
