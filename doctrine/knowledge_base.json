@@ -281,6 +281,30 @@
         }
       ]
     },
+    "poursuivre_cargo": {
+      "label": "Doctrine Ormuz v3 : poursuivre cargo_1 (follow_target, sans stop_distance)",
+      "methods": [
+        {
+          "name": "Poursuite du cargo (cargo_1 présent et non détruit)",
+          "preconditions": [
+            {
+              "type": "agent_present",
+              "value": "cargo_1"
+            }
+          ],
+          "subtasks": [
+            {
+              "task": "follow_target",
+              "args": [
+                "__self__",
+                "cargo_1",
+                null
+              ]
+            }
+          ]
+        }
+      ]
+    },
     "reagir_conditions": {
       "label": "R\u00e9agit selon les conditions de la description",
       "methods": [
@@ -403,12 +427,6 @@
       "args": [
         "agent",
         "zone"
-      ]
-    },
-    "poursuivre_cargo": {
-      "label": "Doctrine Ormuz v3 : poursuivre cargo_1 (follow_target, sans stop_distance)",
-      "args": [
-        "agent"
       ]
     },
     "escorter_convoi": {

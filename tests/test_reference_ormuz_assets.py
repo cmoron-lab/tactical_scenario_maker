@@ -1,9 +1,13 @@
 # tests/test_reference_ormuz_assets.py
 """Artefacts de référence de l'Escorte d'Ormuz : scénario v2 + profil
 cinématique + doctrine locale (KB, méthodes, actions v3)."""
+from tsm.domain import doctrine
 from tsm.domain.profile import load_profile
 from tsm.domain.reference import load_reference_scenario
+from tsm.execution.actions import attack_target, follow_target, goto
 from tsm.planning import methods
+from tsm.planning.planner import Planner
+from tsm.vendor import gtpyhop
 
 
 def test_ormuz_has_three_forces_and_deferred_red_force():
@@ -64,7 +68,42 @@ def test_repli_apres_perte_m_retreats_once_vedette_1_destroyed():
     assert plan == [('goto', 'vedette_2', (1.2630, 103.7560), 0.00015)]
 
 
-def test_repli_apres_perte_m_pursues_cargo_while_vedette_1_lives():
+def test_repli_apres_perte_m_delegates_to_poursuivre_cargo_while_vedette_1_lives():
+    # poursuivre_cargo est déclaratif (doctrine/knowledge_base.json) : la
+    # méthode Python délègue la poursuite à la tâche KB, elle n'émet pas la
+    # primitive elle-même — la décomposition complète est couverte par le
+    # test Planner ci-dessous.
     state = _state({'vedette_1': {'available': True}, 'cargo_1': {'available': True}})
     plan = methods.repli_apres_perte_m(state, 'vedette_2')
-    assert plan == [('follow_target', 'vedette_2', 'cargo_1', None)]
+    assert plan == [('poursuivre_cargo', 'vedette_2')]
+
+
+# ── Garde de régression sur le câblage réel : register_builtin (méthodes
+# Python) + register_kb (poursuivre_cargo déclaratif) + declare_actions
+# (primitives pures) doivent aboutir aux tuples primitifs exacts via le
+# vrai Planner, pas seulement via les fonctions appelées à la main.
+
+def test_find_plan_produces_primitive_tuples_through_real_registration():
+    planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
+    state = gtpyhop.State('ormuz')
+    state.agents = {
+        'cargo_1': {'available': True},
+        'escorte': {'available': True},
+        'vedette_1': {'available': True},
+        'vedette_2': {'available': True},
+    }
+    # Déclaratif (KB) : poursuivre_cargo -> follow_target cargo_1
+    assert planner.find_plan(state, ('poursuivre_cargo', 'vedette_1')) == \
+        [('follow_target', 'vedette_1', 'cargo_1', None)]
+    # Python (register_builtin) : escorter_convoi -> follow puis attack
+    assert planner.find_plan(state, ('escorter_convoi', 'escorte')) == [
+        ('follow_target', 'escorte', 'vedette_1', 0.00045),
+        ('attack_target', 'escorte', 'vedette_1'),
+    ]
+    # Chaîne mixte Python -> KB : repli délègue à poursuivre_cargo
+    assert planner.find_plan(state, ('repli_apres_perte', 'vedette_2')) == \
+        [('follow_target', 'vedette_2', 'cargo_1', None)]
+    # cargo_1 détruit : la précondition agent_present de la KB rend
+    # poursuivre_cargo inapplicable
+    state.agents['cargo_1']['available'] = False
+    assert planner.find_plan(state, ('poursuivre_cargo', 'vedette_1')) is False

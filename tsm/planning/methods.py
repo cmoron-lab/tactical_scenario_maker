@@ -419,9 +419,12 @@ def interposer_m(state, agent, threat, protege):
 # AVANT _task_method_dict (tsm/vendor/gtpyhop.py), donc un tuple ('goto', ...)
 # émis ici devient directement le pas terminal du plan — jamais re-décomposé.
 # Contrairement aux feuilles legacy ci-dessus (résolution générique par
-# token), ce premier scénario nomme ses cibles/zones en dur (cargo_1,
-# vedette_1, repli_nord...) : mono-cargo, mono-menace, pas de détection
-# générique à ce stade (cf. plan v3, décision de contrôleur #3/#4).
+# token), ce premier scénario nomme ses cibles/zones en dur (vedette_1,
+# repli_nord...) : mono-cargo, mono-menace, pas de détection générique à ce
+# stade (cf. plan v3, décision de contrôleur #3/#4). poursuivre_cargo n'est
+# PAS ici : sa décomposition tient dans le vocabulaire déclaratif existant
+# (précondition agent_present, args non-token passés tels quels par _resolve),
+# elle vit donc dans doctrine/knowledge_base.json::tasks via register_kb.
 
 # ponytail: positions figées, dupliquées depuis scenarios/escorte_ormuz.json —
 # le state GTPyhop v3 ne porte pas encore les zones du scénario. À réviser si
@@ -453,10 +456,6 @@ def attack_target_m(state: Any, agent: str, target: str) -> list[tuple[Any, ...]
     return [('attack_target', agent, target)]
 
 
-def poursuivre_cargo_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
-    return follow_target_m(state, agent, 'cargo_1')
-
-
 def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
     follow = follow_target_m(state, agent, 'vedette_1', 0.00045)
     if follow is False:
@@ -470,10 +469,12 @@ def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
 def repli_apres_perte_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
     """Repli vers repli_nord si vedette_1 est détruite, sinon poursuite du
     cargo — même convention d'état que follow_target_m (`available: False`
-    marque une destruction, cf. tsm/domain/conditions.py::agent_destroyed)."""
+    marque une destruction, cf. tsm/domain/conditions.py::agent_destroyed).
+    La poursuite est déléguée à la tâche déclarative poursuivre_cargo
+    (knowledge_base.json), que GTPyhop décompose à son tour."""
     if not state.agents.get('vedette_1', {}).get('available', True):
         return goto_m(state, agent, 'repli_nord')
-    return poursuivre_cargo_m(state, agent)
+    return [('poursuivre_cargo', agent)]
 
 
 def register_builtin() -> None:
@@ -485,7 +486,6 @@ def register_builtin() -> None:
     gtpyhop.declare_task_methods('orbiter', orbiter_m)
     gtpyhop.declare_task_methods('interposer', interposer_m)
     gtpyhop.declare_task_methods('transiter_vers_zone', goto_m)
-    gtpyhop.declare_task_methods('poursuivre_cargo', poursuivre_cargo_m)
     gtpyhop.declare_task_methods('escorter_convoi', escorter_convoi_m)
     gtpyhop.declare_task_methods('repli_apres_perte', repli_apres_perte_m)
 
