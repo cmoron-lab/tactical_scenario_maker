@@ -34,6 +34,17 @@ def test_log_event_writes_flushed_json_line(tmp_path):
     logs.close()
 
 
+def test_log_event_accepts_optional_sim_time_s(tmp_path):
+    logs = RunLogs(directory=tmp_path)
+    logs.log_event('plan', agent='usv', sim_time_s=12.5)
+    logs.log_event('spawn', agent='usv2')
+    logs.close()
+    with open(tmp_path / 'events.jsonl') as f:
+        events = [json.loads(line) for line in f]
+    assert events[0]['sim_time_s'] == 12.5
+    assert events[1]['sim_time_s'] is None  # horodatage mur ('t') reste, sim_time_s optionnel
+
+
 def test_log_event_preserves_order(tmp_path):
     logs = RunLogs(directory=tmp_path)
     logs.log_event('spawn', agent='usv1')

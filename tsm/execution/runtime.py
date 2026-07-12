@@ -44,7 +44,7 @@ def main(scenario_name: str) -> None:
             try:
                 client.spawn_vessel(name, (spec.position.lat, spec.position.lon),
                                     spec.model, spec.linear_velocity,
-                                    spec.angular_velocity_max, heading=spec.heading_deg)
+                                    spec.angular_velocity_max, heading_deg=spec.heading_deg)
                 logs.log_event('spawn', agent=name)
             except Exception as e:
                 client.log_error(f"[spawn] échec pour '{name}' (model={spec.model!r}): {e}")

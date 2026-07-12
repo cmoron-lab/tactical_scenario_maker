@@ -48,10 +48,13 @@ class RunLogs:
             self._wp.writerow([_ts(), agent, lat, lon])
             self._wp_f.flush()
 
-    def log_event(self, kind: str, **fields: Any) -> None:
-        # appelé depuis les threads agents ET le thread principal
+    def log_event(self, kind: str, sim_time_s: float | None = None, **fields: Any) -> None:
+        # appelé depuis les threads agents ET le thread principal ; sim_time_s
+        # est la source de vérité temporelle (temps simulé), 't' ne sert plus
+        # qu'à l'affichage mur.
         with self._events_lock:
-            self._events_f.write(json.dumps({'t': _ts(), 'kind': kind, **fields}) + '\n')
+            event = {'t': _ts(), 'sim_time_s': sim_time_s, 'kind': kind, **fields}
+            self._events_f.write(json.dumps(event) + '\n')
             self._events_f.flush()
 
     def close(self) -> None:

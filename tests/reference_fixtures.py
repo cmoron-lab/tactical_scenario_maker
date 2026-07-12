@@ -1,6 +1,10 @@
 # tests/reference_fixtures.py
+from collections.abc import Mapping
+
 from tsm.domain.profile import ExecutionProfile
 from tsm.domain.reference import ReferenceScenario
+from tsm.domain.scenario import Position
+from tsm.execution.world import WorldSnapshot
 
 
 def scenario_with_single_agent(agent: str, mission_task: str) -> ReferenceScenario:
@@ -30,3 +34,12 @@ def execution_profile(agent: str, capabilities: set[str]) -> ExecutionProfile:
             },
         }},
     })
+
+
+def snapshot(sim_time_s: float, positions: Mapping[str, tuple[float, float]],
+             destroyed: set[str] | None = None) -> WorldSnapshot:
+    return WorldSnapshot(
+        revision=int(sim_time_s),
+        sim_time_s=sim_time_s,
+        positions={name: Position(lat, lon) for name, (lat, lon) in positions.items()},
+        destroyed=frozenset(destroyed or set()))
