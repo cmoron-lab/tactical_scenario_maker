@@ -45,7 +45,9 @@ def _seconds(stamp: Any) -> float:
 
 class LotusimClient:
     def __init__(self, node_name: str = 'goto_point', namespace: str = '/lotusim',
-                 on_pose: Optional[Callable[[str, float, float], None]] = None) -> None:
+                 on_pose: Optional[Callable[[str, float, float], None]] = None,
+                 on_world_update: Optional[Callable[[float, dict[str, Position]], None]] = None
+                 ) -> None:
         self._node = Node(node_name, namespace=namespace)
         self._executor = MultiThreadedExecutor()
         self._executor.add_node(self._node)
@@ -54,6 +56,10 @@ class LotusimClient:
         self._lock = threading.Lock()
         self._watchers: dict[str, list[threading.Event]] = {}
         self._on_pose = on_pose
+        # Observation groupée (flotte complète + sim_time_s) pour WorldStore
+        # (Task 7, v3) — distincte de on_pose, qui notifie agent par agent
+        # (legacy v1, register_watch/get_pose).
+        self._on_world_update = on_world_update
         self._node.create_subscription(VesselPositionArray, '/lotusim/poses', self._cb, 10)
 
     # ── Observation des poses ────────────────────────────────────────────
@@ -85,8 +91,10 @@ class LotusimClient:
                 if changed:
                     for ev in self._watchers.get(name, []):
                         ev.set()
-        # Callback utilisateur hors verrou : évite le self-deadlock si le
-        # callback relit get_pose/register_watch.
+        # Callbacks utilisateur hors verrou : évite le self-deadlock si l'un
+        # d'eux relit get_pose/register_watch.
+        if self._on_world_update:
+            self._on_world_update(sim_time_s, poses)
         if cb:
             for name, lat, lon in to_notify:
                 cb(name, lat, lon)
@@ -173,6 +181,15 @@ class LotusimClient:
         if not response.success:
             raise RuntimeError(f"set_waypoints({agent}): échec côté LOTUSim")
         self._node.get_logger().info(f'[{agent}] → ({lat:.5f}, {lon:.5f})')
+
+    def wait_ready(self, agent: str, timeout_s: float = 10.0) -> None:
+        """Probe de disponibilité (Task 7) : le contrôleur v3 l'appelle après
+        spawn_vessel, avant de considérer l'agent utilisable — attend que le
+        service de waypoints soit prêt côté LOTUSim."""
+        service_name = f'/lotusim/{agent}/waypoints'
+        cli = self._node.create_client(SetWaypoints, service_name)
+        if not cli.wait_for_service(timeout_sec=timeout_s):
+            raise RuntimeError(f"wait_ready({agent}): service indisponible ({service_name})")
 
     def stop_vessel(self, agent: str, timeout_s: float = 10.0) -> None:
         service_name = f'/lotusim/{agent}/stop'

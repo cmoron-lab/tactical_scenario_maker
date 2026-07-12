@@ -34,6 +34,17 @@ def test_log_event_writes_flushed_json_line(tmp_path):
     logs.close()
 
 
+def test_log_pose_uses_sim_time_s_when_given_else_wall_clock(tmp_path):
+    logs = RunLogs(directory=tmp_path)
+    logs.log_pose('usv', 1.26, 103.75, sim_time_s=42.5)
+    logs.log_pose('usv2', 1.0, 2.0)  # legacy v1 : pas de sim_time_s, horodatage mur
+    logs.close()
+    with open(tmp_path / 'poses.csv') as f:
+        rows = list(csv.reader(f))
+    assert rows[1] == ['42.5', 'usv', '1.26', '103.75']
+    assert rows[2][0] != '' and 'T' in rows[2][0]  # ISO8601 mur, pas un float
+
+
 def test_log_event_accepts_optional_sim_time_s(tmp_path):
     logs = RunLogs(directory=tmp_path)
     logs.log_event('plan', agent='usv', sim_time_s=12.5)

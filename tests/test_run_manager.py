@@ -1,14 +1,15 @@
 import json
+import subprocess
 import sys
 import time
 
 import pytest
 
-from tsm.web.runs import RunBusyError, RunManager
+from tsm.web.runs import RunBusyError, RunManager, _default_cmd
 
-SLEEP_30 = lambda name: [sys.executable, '-c', 'import time; time.sleep(30)']  # noqa: E731
-EXIT_3 = lambda name: [sys.executable, '-c', 'import sys; sys.exit(3)']  # noqa: E731
-SIGINT_OK = lambda name: [  # noqa: E731
+SLEEP_30 = lambda name, profile=None: [sys.executable, '-c', 'import time; time.sleep(30)']  # noqa: E731
+EXIT_3 = lambda name, profile=None: [sys.executable, '-c', 'import sys; sys.exit(3)']  # noqa: E731
+SIGINT_OK = lambda name, profile=None: [  # noqa: E731
     sys.executable, '-c',
     'import signal,sys,time\n'
     'signal.signal(signal.SIGINT, lambda *a: sys.exit(0)); time.sleep(30)',
@@ -29,6 +30,8 @@ def test_status_initial_idle(tmp_path):
     assert rm.status() == {
         'state': 'idle', 'scenario': None, 'pid': None,
         'started_at': None, 'returncode': None, 'stop_requested': False,
+        'verdict': 'pending', 'verdict_reason': None,
+        'profile': None, 'run_id': None,
     }
 
 
@@ -86,7 +89,7 @@ def test_stop_timer_does_not_kill_next_run(tmp_path, monkeypatch):
     # le timer armé au stop() du run N ne doit pas pouvoir tuer le run N+1
     # relancé dans sa fenêtre — fenêtre rétrécie pour la traverser vite
     monkeypatch.setattr('tsm.web.runs.STOP_TIMEOUT', 0.3)
-    cmd = lambda name: SIGINT_OK(name) if name == 'court' else SLEEP_30(name)  # noqa: E731
+    cmd = lambda name, profile=None: SIGINT_OK(name) if name == 'court' else SLEEP_30(name)  # noqa: E731
     rm = RunManager(cmd=cmd, logs_dir=tmp_path)
     rm.launch('court')
     time.sleep(0.2)  # laisse le sous-processus installer son handler SIGINT
@@ -195,3 +198,96 @@ def test_poses_truncation_of_both_files_purges_once(tmp_path):
     assert agent['t'] == 't9'
     assert agent['trail'] == [[9.0, 9.0]]
     assert agent['waypoint'] == [9.5, 9.5]
+
+
+# ── Task 7 : profil, run_id, verdict, provenance ─────────────────────────────
+
+def test_default_cmd_includes_profile_flag_only_when_given():
+    assert _default_cmd('escorte_ormuz', 'kinematic-ormuz') == [
+        sys.executable, 'main.py', 'escorte_ormuz', '--profile', 'kinematic-ormuz']
+    assert _default_cmd('demo') == [sys.executable, 'main.py', 'demo']
+    assert _default_cmd('demo', None) == [sys.executable, 'main.py', 'demo']
+
+
+def test_launch_forwards_profile_to_cmd_and_exposes_it_in_status(tmp_path):
+    seen = {}
+
+    def cmd(name, profile=None):
+        seen['name'], seen['profile'] = name, profile
+        return SLEEP_30(name)
+
+    rm = RunManager(cmd=cmd, logs_dir=tmp_path)
+    rm.launch('escorte_ormuz', profile='kinematic-ormuz')
+    try:
+        assert seen == {'name': 'escorte_ormuz', 'profile': 'kinematic-ormuz'}
+        assert rm.status()['profile'] == 'kinematic-ormuz'
+    finally:
+        rm.stop()
+
+
+def test_relaunch_resets_verdict_from_previous_run(tmp_path):
+    rm = RunManager(cmd=SLEEP_30, logs_dir=tmp_path)
+    rm.record_verdict('succeeded', 'all_in_zone')
+    rm.launch('demo')
+    try:
+        status = rm.status()
+        assert status['verdict'] == 'pending'
+        assert status['verdict_reason'] is None
+    finally:
+        rm.stop()
+
+
+def test_status_reads_verdict_lazily_from_report_json_once_process_exited(tmp_path):
+    run_dir = tmp_path / 'r-000001'
+    run_dir.mkdir()
+    (run_dir / 'report.json').write_text(json.dumps({
+        'verdict': 'failed', 'reason': 'agent_destroyed',
+        'started_sim_time_s': 0.0, 'finished_sim_time_s': 12.0,
+    }))
+    rm = RunManager(cmd=EXIT_3, logs_dir=tmp_path)
+    rm.launch('escorte_ormuz', profile='kinematic-ormuz')
+    _wait_until(lambda: rm.status()['state'] != 'running')
+    status = rm.status()
+    assert status['state'] == 'failed'  # état processus (EXIT_3 → rc=3)
+    assert status['verdict'] == 'failed'  # verdict métier, lu dans report.json
+    assert status['verdict_reason'] == 'agent_destroyed'
+    assert status['run_id'] == 'r-000001'
+
+
+def test_events_and_poses_are_read_from_the_run_id_subdirectory_once_known(tmp_path):
+    run_dir = tmp_path / 'r-000001'
+    run_dir.mkdir()
+    (run_dir / 'events.jsonl').write_text(json.dumps({'kind': 'run_start'}) + '\n')
+    (run_dir / 'poses.csv').write_text('timestamp,agent,lat,lon\n0.0,usv,1.0,103.0\n')
+    # fichiers plats (legacy) laissés en place : ne doivent pas être lus une
+    # fois qu'un run_id v3 est connu — sinon on afficherait un run périmé.
+    (tmp_path / 'events.jsonl').write_text(json.dumps({'kind': 'stale'}) + '\n')
+
+    rm = RunManager(cmd=SLEEP_30, logs_dir=tmp_path)
+    rm.launch('escorte_ormuz', profile='kinematic-ormuz')
+    try:
+        events = rm.events_since(0)
+        assert [e['kind'] for e in events['events']] == ['run_start']
+        assert rm.poses()['agents']['usv']['lat'] == 1.0
+    finally:
+        rm.stop()
+
+
+# ── CLI (main.py) : erreurs claires avant tout import ROS ────────────────────
+
+def _run_cli(*args):
+    from tsm.web.runs import REPO_ROOT
+    return subprocess.run([sys.executable, 'main.py', *args], cwd=REPO_ROOT,
+                          capture_output=True, text=True, timeout=10)
+
+
+def test_cli_v2_scenario_without_profile_exits_with_clear_french_error():
+    result = _run_cli('escorte_ormuz')
+    assert result.returncode != 0
+    assert 'profile' in result.stderr
+
+
+def test_cli_v1_scenario_with_profile_exits_with_clear_french_error():
+    result = _run_cli('demo_veille_drone_intru', '--profile', 'kinematic-ormuz')
+    assert result.returncode != 0
+    assert 'profile' in result.stderr

@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 from tsm.domain.scenario import ScenarioError
 from tsm.web.api import Api
-from tsm.web.runs import RunBusyError
+from tsm.web.runs import RunArtifactError, RunBusyError
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[2] / 'templates' / 'index.html'
 
@@ -30,10 +30,14 @@ def _route(method: str, path: str):
             return 'run_events', {}
         if parts == ['api', 'run', 'poses']:
             return 'run_poses', {}
+        if parts == ['api', 'profiles']:
+            return 'list_profiles', {}
         if len(parts) == 3 and parts[:2] == ['api', 'scenario']:
             return 'get_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'plan':
             return 'get_plan', {'name': parts[2]}
+        if len(parts) == 4 and parts[:2] == ['api', 'run'] and parts[3] in ('report', 'manifest'):
+            return 'run_artifact', {'run_id': parts[2], 'kind': parts[3]}
     if method == 'POST':
         if parts == ['api', 'kb']:
             return 'save_kb', {}
@@ -83,6 +87,13 @@ class _Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get('Content-Length', 0))
         return json.loads(self.rfile.read(length))
 
+    def _read_json_or_empty(self):
+        # corps optionnel (ex. POST /api/scenario/<n>/launch sans profil pour un v1)
+        length = int(self.headers.get('Content-Length', 0))
+        if length == 0:
+            return {}
+        return json.loads(self.rfile.read(length))
+
     def _dispatch(self, method):
         action, params = _route(method, urlparse(self.path).path)
         try:
@@ -90,6 +101,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_html()
             elif action == 'list_scenarios':
                 self._send_json(self.api.scenarios())
+            elif action == 'list_profiles':
+                self._send_json(self.api.profiles())
             elif action == 'get_kb':
                 self._send_json(self.api.get_kb())
             elif action == 'save_kb':
@@ -103,7 +116,10 @@ class _Handler(BaseHTTPRequestHandler):
             elif action == 'delete_scenario':
                 self._send_json(self.api.delete_scenario(params['name']))
             elif action == 'launch_scenario':
-                self._send_json(self.api.launch(params['name']))
+                body = self._read_json_or_empty()
+                self._send_json(self.api.launch(params['name'], body.get('profile')))
+            elif action == 'run_artifact':
+                self._send_json(self.api.run_artifact(params['run_id'], params['kind']))
             elif action == 'run_status':
                 self._send_json(self.api.run_status())
             elif action == 'run_events':
@@ -129,6 +145,8 @@ class _Handler(BaseHTTPRequestHandler):
         except RunBusyError:
             self._send_json({'error': 'run déjà en cours',
                               'scenario': self.api.run_status()['scenario']}, 409)
+        except RunArtifactError:
+            self._send_json({'error': 'not found'}, 404)
 
     def do_GET(self):
         self._dispatch('GET')

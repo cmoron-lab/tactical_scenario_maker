@@ -155,3 +155,15 @@ def delete_scenario(name: str, directory: Path = SCENARIOS_DIR) -> None:
     path = _path(name, directory)
     if path.exists():
         path.unlink()
+
+
+def peek_version(name: str, directory: Path = SCENARIOS_DIR) -> Any:
+    """Lit juste le champ 'version' d'un document de scénario, sans le valider
+    contre un schéma précis — sert à choisir entre le loader v1 (ce module) et
+    le loader v2 (tsm.domain.reference) avant de parser pour de bon."""
+    path = _path(name, directory)
+    if not path.exists():
+        raise ScenarioError(f'scénario introuvable: {name}')
+    with open(path, encoding='utf-8') as f:
+        doc = json.load(f)
+    return doc.get('version') if isinstance(doc, dict) else None

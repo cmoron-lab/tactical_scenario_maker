@@ -148,3 +148,7 @@ def load_profile(name: str, directory: Path = PROFILES_DIR) -> ExecutionProfile:
         raise ProfileError(f'profil introuvable: {name}')
     with open(path, encoding='utf-8') as f:
         return ExecutionProfile.from_dict(json.load(f))
+
+
+def list_profiles(directory: Path = PROFILES_DIR) -> list[str]:
+    return sorted(p.stem for p in directory.glob('*.json'))

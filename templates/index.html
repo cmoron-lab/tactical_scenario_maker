@@ -1069,6 +1069,10 @@ header {
 .status-badge.stopping { background: rgba(245,158,11,0.16);  color: var(--status-warning); }
 .status-badge.finished { background: rgba(59,130,246,0.14);  color: var(--status-finished); }
 .status-badge.failed   { background: rgba(239,68,68,0.14);   color: var(--status-failed); }
+.status-badge.pending   { background: rgba(100,116,139,0.14); color: var(--status-idle); }
+.status-badge.succeeded { background: rgba(34,197,94,0.14);   color: var(--status-running); }
+.status-badge.timed_out { background: rgba(245,158,11,0.16);  color: var(--status-warning); }
+.status-badge.cancelled { background: rgba(100,116,139,0.14); color: var(--status-idle); }
 
 .exec-info-row {
   display: flex;
@@ -1490,7 +1494,9 @@ function switchTab(tab) {
 // Single polling loop (1s) started at page load. /api/run is always polled;
 // events/poses are only pulled when relevant (see pollTick) to avoid hammering
 // the server while nobody is watching.
-let runStatus = { state: 'idle', scenario: null, pid: null, started_at: null, returncode: null, stop_requested: false };
+let runStatus = { state: 'idle', scenario: null, pid: null, started_at: null, returncode: null,
+                   stop_requested: false, verdict: 'pending', verdict_reason: null,
+                   profile: null, run_id: null };
 let lastStartedAt = null;   // detects a NEW run (backend truncates events.jsonl on launch)
 let runEvents = [];
 let runEventsCursor = 0;
@@ -1595,6 +1601,19 @@ function execFooterLink() {
   return `<div class="exec-footer-link"><a href="${escHtml(url)}" target="_blank" rel="noopener">Ouvrir l'IHM LOTUSim ↗</a></div>`;
 }
 
+const VERDICT_LABELS = { pending: 'En attente', succeeded: 'Succès', failed: 'Échec',
+                          timed_out: 'Timeout', cancelled: 'Annulé' };
+
+// Temps simulé courant : le dernier sim_time_s vu dans le flux d'événements
+// (les événements v1 n'en portent pas — reste '—' pour un run legacy).
+function currentSimTime() {
+  for (let i = runEvents.length - 1; i >= 0; i--) {
+    const t = runEvents[i].sim_time_s;
+    if (t !== null && t !== undefined) return t;
+  }
+  return null;
+}
+
 function renderExecControl() {
   const el = document.getElementById('exec-control');
   if (!el) return;
@@ -1609,13 +1628,22 @@ function renderExecControl() {
   const badgeLabel = { running: s.stop_requested ? 'Arrêt en cours' : 'En cours',
                         finished: 'Terminé', failed: 'Échec' }[s.state] || s.state;
   const startedLocal = s.started_at ? new Date(s.started_at).toLocaleTimeString() : '—';
+  const simTime = currentSimTime();
+  const finished = s.state === 'finished' || s.state === 'failed';
   el.innerHTML = `
-    <div class="exec-info-row"><span class="exec-info-label">Scénario</span><span class="exec-info-val">${escHtml(s.scenario || '—')}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">Scénario</span><span class="exec-info-val">${escHtml(s.scenario || '—')}${s.profile ? ' · ' + escHtml(s.profile) : ''}</span></div>
     <div class="exec-info-row"><span class="exec-info-label">État</span><span class="status-badge ${badgeCls}">${badgeLabel}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">Verdict</span><span class="status-badge ${s.verdict}">${VERDICT_LABELS[s.verdict] || s.verdict}</span></div>
     <div class="exec-info-row"><span class="exec-info-label">PID</span><span class="exec-info-val">${s.pid ?? '—'}</span></div>
     <div class="exec-info-row"><span class="exec-info-label">Démarré à</span><span class="exec-info-val">${startedLocal}</span></div>
     <div class="exec-info-row"><span class="exec-info-label">Durée</span><span class="exec-info-val">${formatElapsed()}</span></div>
+    <div class="exec-info-row"><span class="exec-info-label">Temps simulé</span><span class="exec-info-val">${simTime !== null ? simTime.toFixed(1) + ' s' : '—'}</span></div>
     ${s.state === 'running' ? '<button class="btn btn-stop btn-full" onclick="stopRun()">■ Arrêter le run</button>' : ''}
+    ${finished && s.run_id ? `
+      <div class="exec-footer-link">
+        <a href="/api/run/${escHtml(s.run_id)}/report" target="_blank" rel="noopener">report.json ↗</a> ·
+        <a href="/api/run/${escHtml(s.run_id)}/manifest" target="_blank" rel="noopener">manifest.json ↗</a>
+      </div>` : ''}
     ${execFooterLink()}`;
 }
 
@@ -1627,7 +1655,22 @@ function stopRun() {
 }
 
 // ── Timeline d'événements ────────────────────────────────────────────────────
-const EVT_ICONS = { run_start: '▶', plan_preview: '✎', spawn: '⚓', spawn_error: '⚠', plan: '⇄', run_end: '■' };
+const EVT_ICONS = {
+  run_start: '▶', plan_preview: '✎', spawn: '⚓', spawn_error: '⚠', plan: '⇄', run_end: '■',
+  // v3 (RunController / WhiteCell — tsm/execution/controller.py, white_cell.py)
+  objective_submitted: '→', trigger_fired: '⚡', adjudication: '⚔', verdict: '🏁',
+  purge: '🧹', run_stop: '■', preflight_failed: '⛔', spawn_failed: '⚠',
+  engagement_accepted: '✓', engagement_rejected: '✕',
+};
+// objective_update porte son statut dans evt.status (submitted/accepted/succeeded/
+// failed/... — cf. ObjectiveStatus), pas dans evt.kind : icône dérivée à part.
+const OBJECTIVE_UPDATE_ICONS = {
+  accepted: '✓', succeeded: '✓', failed: '✕', cancelled: '⊘', timed_out: '⏱', in_progress: '⇄',
+};
+function eventIcon(evt) {
+  if (evt.kind === 'objective_update') return OBJECTIVE_UPDATE_ICONS[evt.status] || '•';
+  return EVT_ICONS[evt.kind] || '•';
+}
 
 // Palette stable par agent — même fonction (djb2) utilisée par la timeline et
 // la mini-carte, pour que le chip d'un agent et son marker partagent la couleur.
@@ -1640,20 +1683,32 @@ function agentColor(name) {
 
 function formatEventText(evt) {
   switch (evt.kind) {
-    case 'run_start':   return `Run démarré : ${escHtml(evt.scenario)} (agents : ${(evt.agents || []).map(escHtml).join(', ')})`;
+    case 'run_start':   return `Run démarré : ${escHtml(evt.scenario)}${evt.profile ? ' · profil ' + escHtml(evt.profile) : ''} (agents : ${(evt.agents || []).map(escHtml).join(', ')})`;
     case 'plan_preview': return `${escHtml(evt.agent)} · plan prévu : ${escHtml(evt.plan)}`;
     case 'spawn':        return `${escHtml(evt.agent)} · apparu dans la simulation`;
     case 'spawn_error':  return `${escHtml(evt.agent)} · échec du spawn : ${escHtml(evt.error)}`;
+    case 'spawn_failed': return `${escHtml(evt.agent)} · échec du spawn : ${escHtml(evt.reason)}`;
     case 'plan':
       if (evt.note === 'inactif') return `${escHtml(evt.agent)} · plan vide (inactif)`;
       return `${escHtml(evt.agent)} · nouveau plan : ${(evt.plan || []).map(escHtml).join(' → ')}`;
     case 'run_end':      return 'Run terminé';
+    // ── v3 : objectifs, cellule blanche, verdict ──────────────────────────
+    case 'objective_submitted': return `${escHtml(evt.agent)} · objectif soumis : ${escHtml(evt.capability)}`;
+    case 'objective_update':    return `${escHtml(evt.agent)} · ${escHtml(evt.status)}${evt.reason ? ' — ' + escHtml(evt.reason) : ''}`;
+    case 'trigger_fired':       return `Déclencheur : ${escHtml(evt.trigger)}`;
+    case 'adjudication':        return `${escHtml(evt.attacker)} → ${escHtml(evt.target)} : cible détruite`;
+    case 'engagement_accepted': return `${escHtml(evt.attacker)} → ${escHtml(evt.target)} : engagement accepté`;
+    case 'engagement_rejected': return `Engagement refusé — ${escHtml(evt.reason)}`;
+    case 'purge':                return `${escHtml(evt.agent)} · purge avant spawn`;
+    case 'preflight_failed':     return `Préflight refusé : ${escHtml(evt.reason)}`;
+    case 'run_stop':              return `Run arrêté : ${escHtml(evt.reason)}`;
+    case 'verdict':               return `Verdict : ${escHtml(evt.verdict)}${evt.reason ? ' — ' + escHtml(evt.reason) : ''}`;
     default:              return escHtml(evt.kind);
   }
 }
 
 function buildEventRow(evt) {
-  const icon = EVT_ICONS[evt.kind] || '•';
+  const icon = eventIcon(evt);
   const time = evt.t ? new Date(evt.t).toLocaleTimeString() : '';
   const chip = evt.agent ? `<span class="evt-chip" style="background:${agentColor(evt.agent)}">${escHtml(evt.agent)}</span>` : '';
   return `
@@ -1794,7 +1849,11 @@ function loadList() {
 function selectScenario(name) {
   current = name;
   fetch(`/api/scenario/${name}`).then(r => r.json()).then(doc => {
-    renderEditor(name, doc.agents, false);
+    if (doc.version === 2) {
+      renderReadOnlyScenario(name, doc);
+    } else {
+      renderEditor(name, doc.agents, false);
+    }
     loadList();
   });
 }
@@ -1923,6 +1982,66 @@ function buildCard(name, a = {}) {
     updateConditions(name, parsed.task, initConds);
   };
   return div;
+}
+
+// ── Scénario v2 (Scenario Request) : fiche lecture seule ────────────────────
+// Pas d'éditeur v1 pour ces scénarios (forces/relations/triggers/end state —
+// un tout autre schéma) : juste un résumé + le choix du profil d'exécution
+// pour le lancement (décision 9 du plan Task 7).
+function renderReadOnlyScenario(name, doc) {
+  document.getElementById('editor').innerHTML = `
+    <div class="scenario-bar">
+      <span class="sc-name-input" style="border-color:transparent;background:transparent;padding-left:0;color:var(--navy)">${escHtml(name)}</span>
+      <span class="sc-file-pill">v2 · lecture seule</span>
+    </div>
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Forces</span></div>
+      <div class="exec-card-body">
+        ${Object.entries(doc.forces || {}).map(([fname, f]) => `
+          <div class="exec-info-row">
+            <span class="exec-info-label">${escHtml(fname)}${f.spawn === 'deferred' ? ' (différée)' : ''}</span>
+            <span class="exec-info-val">${(f.agents || []).map(escHtml).join(', ')}</span>
+          </div>`).join('') || '<p class="exec-empty">Aucune force.</p>'}
+      </div>
+    </div>
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Agents</span></div>
+      <div class="exec-card-body">
+        ${Object.entries(doc.agents || {}).map(([aname, a]) => `
+          <div class="exec-info-row">
+            <span class="exec-info-label">${escHtml(aname)} · ${escHtml(a.platform || '')}</span>
+            <span class="exec-info-val">${escHtml(a.mission?.task || '—')}</span>
+          </div>`).join('') || '<p class="exec-empty">Aucun agent.</p>'}
+      </div>
+    </div>
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Fin de scénario</span></div>
+      <div class="exec-card-body">
+        <div class="exec-info-row"><span class="exec-info-label">Succès</span><span class="exec-info-val">${(doc.end?.success || []).length} condition(s)</span></div>
+        <div class="exec-info-row"><span class="exec-info-label">Échec</span><span class="exec-info-val">${(doc.end?.failure || []).length} condition(s)</span></div>
+        <div class="exec-info-row"><span class="exec-info-label">Timeout</span><span class="exec-info-val">${escHtml(doc.end?.timeout || '—')}</span></div>
+      </div>
+    </div>
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Lancement</span></div>
+      <div class="exec-card-body">
+        <div class="field">
+          <label>Profil d'exécution</label>
+          <select id="profile-select"><option>Chargement…</option></select>
+        </div>
+        <button class="btn btn-launch" style="margin-top:14px" onclick="launchScenarioV2('${name}')">▶ Lancer sur Lotusim</button>
+      </div>
+    </div>
+    <div id="launch-status"></div>
+  `;
+  fetch('/api/profiles').then(r => r.json()).then(names => {
+    const sel = document.getElementById('profile-select');
+    if (!sel) return;
+    sel.innerHTML = names.length
+      ? names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('')
+      : '<option value="">Aucun profil disponible</option>';
+  });
+  updateLaunchButtonState();
 }
 
 function parseMission(m) {
@@ -2197,19 +2316,22 @@ function deleteScenario(name) {
   });
 }
 
-function launchScenario(name) {
+function doLaunch(name, body) {
   const statusEl = document.getElementById('launch-status');
   const btn = document.querySelector('.btn-launch');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Lancement…'; }
 
-  fetch(`/api/scenario/${name}/launch`, { method: 'POST' })
+  fetch(`/api/scenario/${name}/launch`, {
+    method: 'POST',
+    ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+  })
     .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, data: d })))
     .then(({ ok, status, data }) => {
       if (btn) btn.textContent = '▶ Lancer sur Lotusim';
       if (!ok) {
         if (statusEl) statusEl.innerHTML = status === 409
           ? `<div class="launch-status error">Run déjà en cours (${escHtml(data.scenario || '')}) — arrêtez-le d'abord.</div>`
-          : `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
+          : `<div class="launch-status error">✕ ${escHtml(data.error || 'Erreur au lancement — vérifiez que ROS2 est sourcé.')}</div>`;
         if (btn) btn.disabled = false;
         return;
       }
@@ -2226,6 +2348,17 @@ function launchScenario(name) {
       if (statusEl) statusEl.innerHTML = `<div class="launch-status error">✕ Erreur au lancement — vérifiez que ROS2 est sourcé.</div>`;
       if (btn) { btn.disabled = false; btn.textContent = '▶ Lancer sur Lotusim'; }
     });
+}
+
+function launchScenario(name) {
+  doLaunch(name, null);
+}
+
+function launchScenarioV2(name) {
+  const sel = document.getElementById('profile-select');
+  const profile = sel ? sel.value : '';
+  if (!profile) { toast("Sélectionnez un profil d'exécution."); return; }
+  doLaunch(name, { profile });
 }
 
 function computePlan() {

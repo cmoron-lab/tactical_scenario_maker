@@ -38,9 +38,12 @@ class RunLogs:
         self._pose.writerow(['timestamp', 'agent', 'lat', 'lon'])
         self._wp.writerow(['timestamp', 'agent', 'lat', 'lon'])
 
-    def log_pose(self, agent: str, lat: float, lon: float) -> None:
+    def log_pose(self, agent: str, lat: float, lon: float,
+                 sim_time_s: float | None = None) -> None:
         # appelé depuis le callback du client — sérialisé par le callback group mutuellement exclusif de l'executor, pas par le verrou du client (on_pose est appelé hors verrou)
-        self._pose.writerow([_ts(), agent, lat, lon])
+        # sim_time_s (v3, sur world_store.update_poses) prime sur l'horodatage
+        # mur (_ts(), legacy v1 via on_pose) — même colonne, sémantique différente.
+        self._pose.writerow([sim_time_s if sim_time_s is not None else _ts(), agent, lat, lon])
         self._pose_f.flush()
 
     def log_waypoint(self, agent: str, lat: float, lon: float) -> None:
