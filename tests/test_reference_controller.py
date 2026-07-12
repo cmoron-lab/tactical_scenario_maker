@@ -277,3 +277,22 @@ def test_preflight_purges_all_declared_agents_including_deferred(monkeypatch):
     with pytest.raises(RunStartError):
         controller.start_initial_forces()  # la fake ne retire pas la pose
     assert 'vedette_1' in transport.deleted
+
+
+def test_destroyed_agent_reads_as_unavailable_so_retreat_branch_fires():
+    # vedette_1 détruite ET supprimée (plus de pose) doit rester visible de la
+    # doctrine comme available=False — sinon vedette_2 repart en poursuite au
+    # lieu du repli (rig r-000007).
+    transport = FakeTransport()
+    controller = _ormuz_controller(transport)
+    controller.start_initial_forces()
+    controller.spawn_force("rouge")
+    controller.tick(snapshot(1, {"cargo_1": (1.2620, 103.75), "escorte": (1.2618, 103.75),
+                                 "vedette_1": (1.2630, 103.7520),
+                                 "vedette_2": (1.2632, 103.7530)}))
+    assert controller.supervisor("rouge", "vedette_2").active_objective_id is not None
+    controller.tick(snapshot(2, {"cargo_1": (1.2620, 103.75), "escorte": (1.2618, 103.75),
+                                 "vedette_2": (1.2632, 103.7530)},
+                             destroyed={"vedette_1"}))
+    # perte adjugée → replanification même tick → goto repli_nord
+    assert ("vedette_2", 1.2630, 103.7560) in transport.waypoints

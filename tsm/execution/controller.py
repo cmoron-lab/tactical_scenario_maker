@@ -144,6 +144,12 @@ def _state_from_view(view: ForceView) -> Any:
             'pos': {'lat': pos.lat, 'lon': pos.lon},
             'available': name not in view.world.destroyed,
         }
+    # Un agent détruit puis supprimé n'a plus de pose mais reste une
+    # connaissance tactique : sans cette entrée, `.get('available', True)`
+    # le ferait passer pour vivant et le repli doctrinal ne se déclencherait
+    # jamais (rig r-000007 : vedette_2 repartait en poursuite).
+    for name in view.world.destroyed:
+        state.agents.setdefault(name, {'available': False})
     return state
 
 
