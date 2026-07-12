@@ -430,7 +430,9 @@ class RunController:
         if verdict is not None and verdict is not Verdict.PENDING:
             if not self._verdict_published:
                 self._verdict_published = True
+                # getattr : NoopWhiteCell n'expose pas verdict_reason (décision 2).
                 self._publish({'type': 'verdict', 'verdict': verdict.value,
+                               'reason': getattr(self._white_cell, 'verdict_reason', None),
                                'sim_time_s': world.sim_time_s})
             self.stop(f'verdict:{verdict.value}')
             return

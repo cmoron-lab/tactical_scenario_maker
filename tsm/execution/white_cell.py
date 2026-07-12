@@ -69,6 +69,7 @@ class WhiteCell:
         self._publish_event = publish_event
         self._stop = stop
         self._verdict = Verdict.PENDING
+        self.verdict_reason: str | None = None  # lu par le contrôleur (Task 7)
         self._started_sim_time_s: float | None = None
         self._fired_triggers: set[str] = set()
         self._pending_attacks: dict[str, _PendingAttack] = {}
@@ -82,9 +83,9 @@ class WhiteCell:
         if self._started_sim_time_s is None:
             self._started_sim_time_s = world.sim_time_s
         self._fire_due_triggers(world)
-        self._complete_due_attacks(world)
         if self._verdict is not Verdict.PENDING:
-            return self._verdict  # une injection ratée a déjà tranché (FAILED)
+            return self._verdict  # injection ratée : arbitrage gelé, pas de delete zombie
+        self._complete_due_attacks(world)
         end = self._scenario.end
         # Le garde `end.success and` évite l'auto-succès d'un all() sur liste
         # vide : « au moins une condition de succès » est requise (décision 7).
@@ -101,6 +102,7 @@ class WhiteCell:
         if self._verdict is not Verdict.PENDING:
             return
         self._verdict = verdict
+        self.verdict_reason = reason
         self._publish_event(WhiteCellEvent(
             "verdict", world.sim_time_s,
             {"verdict": verdict.value, "reason": reason}))

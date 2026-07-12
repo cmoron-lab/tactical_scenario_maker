@@ -213,7 +213,9 @@ def test_terminal_verdict_publishes_verdict_event_and_neutralizes_ticks():
     assert not any(e.get("type") == "verdict" for e in events)
     controller.tick(snapshot(5.0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
     count = len(transport.waypoints)
-    assert any(e.get("type") == "verdict" and e["verdict"] == "timed_out" for e in events)
+    verdict_event = next(e for e in events if e.get("type") == "verdict")
+    assert verdict_event["verdict"] == "timed_out"
+    assert "reason" in verdict_event  # raison threadée pour record_verdict (Task 7)
     assert any(e.get("type") == "run_stop" for e in events)
     controller.tick(snapshot(6.0, {"cargo_1": (1.2599, 103.7497), "escorte": (1.26, 103.75)}))
     assert len(transport.waypoints) == count  # tick neutralisé après le verdict

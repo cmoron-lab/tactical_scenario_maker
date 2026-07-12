@@ -200,8 +200,31 @@ def test_spawn_unavailable_forces_failed_verdict():
     cell.tick(snapshot(0, {"cargo_1": (1.2600, 103.7500)}))  # hors passe
     verdict = cell.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500)}))  # trigger
     assert verdict is Verdict.FAILED
+    assert cell.verdict_reason == "spawn_unavailable"  # exposé au contrôleur
     verdict_events = [e for e in events if e.kind == "verdict"]
     assert verdict_events[-1].fields["reason"] == "spawn_unavailable"
+
+
+def test_same_tick_verdict_freezes_adjudication_no_zombie_delete():
+    # Une attaque due au tick T où une injection rate : le verdict FAILED gèle
+    # l'arbitrage — aucun delete_vessel, aucun SUCCEEDED sur un run déjà perdu.
+    deleted = []
+
+    def failing_spawn(_force):
+        raise RunStartError("service de spawn indisponible")
+
+    cell = _cell(spawn_force=failing_spawn, delete_vessel=deleted.append)
+    cell.submit_attack(
+        objective("g-1", "escorte", "engage.attack_target",
+                  {"target_agent": "vedette_1"}),
+        snapshot(0, {"escorte": (1.0, 2.0), "vedette_1": (1.0001, 2.0)}))
+    # t=2.5 : attaque due (PT2S) ET cargo_1 dans la passe → trigger → spawn rate.
+    verdict = cell.tick(snapshot(2.5, {"escorte": (1.0, 2.0),
+                                       "vedette_1": (1.0001, 2.0),
+                                       "cargo_1": (1.2620, 103.7500)}))
+    assert verdict is Verdict.FAILED
+    assert deleted == []
+    assert cell.drain_attack_updates() == []
 
 
 # ── Actions de trigger inconnues : échec sonore, pas de skip silencieux ───────
