@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -41,8 +41,8 @@ def parse_duration(value: str) -> float:
 
 
 def format_duration(seconds: float) -> str:
-    """Inverse de parse_duration pour les durées exprimées en secondes entières
-    ou décimales (aucun scénario de référence n'utilise le composant minutes)."""
+    """Forme canonique PT<secondes>S ; fallback de EndState.to_dict quand la
+    forme authored (timeout_raw) ne décrit plus timeout_s."""
     if seconds == int(seconds):
         return f'PT{int(seconds)}S'
     return f'PT{seconds}S'
@@ -134,6 +134,8 @@ class TacticalAgentSpec:
             raise ScenarioError(f'{where} doit être un objet')
         for spawn_field in _SPAWN_ONLY_FIELDS:
             if spawn_field in doc:
+                # « execution » volontairement sans accent : le test imposé par le
+                # plan vérifie match="profil d.execution" (le « . » couvre l'apostrophe).
                 raise ScenarioError(
                     f"{where}.{spawn_field} appartient au profil d'execution "
                     f"(ExecutionProfile.spawn), pas au scénario v2"
@@ -200,6 +202,9 @@ class EndState:
     success: tuple[Mapping[str, Any], ...]
     failure: tuple[Mapping[str, Any], ...]
     timeout_s: float
+    # Forme ISO telle qu'authored ("PT30M"…) pour un roundtrip exact ;
+    # "" = pas de forme brute, to_dict émet la forme canonique en secondes.
+    timeout_raw: str = field(default='', compare=False)
 
     @classmethod
     def from_dict(cls, doc: Any, where: str) -> EndState:
@@ -215,13 +220,19 @@ class EndState:
         if not isinstance(timeout, str):
             raise ScenarioError(f'{where}.timeout manquant')
         return cls(success=tuple(success), failure=tuple(failure),
-                   timeout_s=parse_duration(timeout))
+                   timeout_s=parse_duration(timeout), timeout_raw=timeout)
 
     def to_dict(self) -> dict[str, Any]:
+        # La forme authored est réémise tant qu'elle décrit encore timeout_s ;
+        # après un replace(timeout_s=...), retour à la forme canonique.
+        if self.timeout_raw and parse_duration(self.timeout_raw) == self.timeout_s:
+            timeout = self.timeout_raw
+        else:
+            timeout = format_duration(self.timeout_s)
         return {
             'success': list(self.success),
             'failure': list(self.failure),
-            'timeout': format_duration(self.timeout_s),
+            'timeout': timeout,
         }
 
 

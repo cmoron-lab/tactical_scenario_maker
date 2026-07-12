@@ -1,5 +1,6 @@
 # tests/test_reference_schema.py
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -71,6 +72,25 @@ def test_compile_authored_graph_includes_deferred_forces_but_marks_them_inactive
     assert graph.by_force["rouge"]["patrouilleur"].task == "patrouiller"
     assert scenario.forces["bleue"].spawn == "initial"
     assert scenario.forces["rouge"].spawn == "deferred"
+
+
+def test_minute_based_timeout_roundtrips_and_replace_falls_back_to_seconds():
+    doc = {
+        "version": 2, "information_policy": "omniscient",
+        "forces": {"bleue": {"agents": ["cargo"]}}, "relations": [],
+        "zones": {}, "triggers": [],
+        "agents": {"cargo": {
+            "platform": "surface_vessel",
+            "position": {"lat": 1.0, "lon": 2.0},
+            "mission": {"task": "transiter", "args": ["cargo"]},
+            "conditions": {},
+        }},
+        "end": {"success": [], "failure": [], "timeout": "PT30M"},
+    }
+    scenario = ReferenceScenario.from_dict(doc)
+    assert scenario.end.timeout_s == 1800.0
+    assert scenario.to_dict() == doc
+    assert replace(scenario.end, timeout_s=90.0).to_dict()["timeout"] == "PT90S"
 
 
 def test_load_reference_scenario_reads_from_directory(tmp_path):
