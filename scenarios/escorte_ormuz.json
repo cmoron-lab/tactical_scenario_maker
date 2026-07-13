@@ -31,13 +31,13 @@
     "vedette_1": {
       "platform": "surface_vessel",
       "position": {"lat": 26.5530, "lon": 56.4020},
-      "mission": {"task": "poursuivre_cargo", "args": ["vedette_1"]},
+      "mission": {"task": "poursuivre", "args": ["vedette_1", "cargo_1"]},
       "conditions": {}
     },
     "vedette_2": {
       "platform": "surface_vessel",
       "position": {"lat": 26.5532, "lon": 56.4030},
-      "mission": {"task": "repli_apres_perte", "args": ["vedette_2"]},
+      "mission": {"task": "repli_apres_perte", "args": ["vedette_2", "repli_nord"]},
       "conditions": {}
     }
   },

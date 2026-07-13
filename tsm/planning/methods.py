@@ -412,19 +412,46 @@ def interposer_m(state, agent, threat, protege):
     return [('aller_a', agent, pos)]
 
 
-# ── Doctrine v3 (Escorte d'Ormuz) — feuilles émettant les primitives ─────────
+# ── Doctrine v3 — feuilles émettant les primitives ───────────────────────────
 #
 # goto/follow_target/attack_target sont des ACTIONS pures (tsm/execution/
 # actions.py), pas des tâches : seek_plan vérifie current_domain._action_dict
 # AVANT _task_method_dict (tsm/vendor/gtpyhop.py), donc un tuple ('goto', ...)
 # émis ici devient directement le pas terminal du plan — jamais re-décomposé.
-# Contrairement aux feuilles legacy ci-dessus (résolution générique par
-# token), ce premier scénario nomme ses cibles/zones en dur (vedette_1,
-# repli_nord...) : mono-cargo, mono-menace, pas de détection générique à ce
-# stade (cf. plan v3, décision de contrôleur #3/#4). poursuivre_cargo n'est
-# PAS ici : sa décomposition tient dans le vocabulaire déclaratif existant
-# (précondition agent_present, args non-token passés tels quels par _resolve),
-# elle vit donc dans doctrine/knowledge_base.json::tasks via register_kb.
+# Aucun référent de scénario en dur (P2, lsga-architecture-v3.md) : les zones,
+# forces et relations viennent du Scenario Request via le superviseur
+# (state.zones / state.forces / state.relations, cf. controller._state_from_view),
+# les cibles désignées passent en argument de mission (pattern
+# transiter_vers_zone). protégé/menace/perte se DÉRIVENT des relations.
+
+# Distance d'engagement (suivi borné avant attack_target) : alignée sur la
+# portée adjudiquée du profil de référence (adjudicated.range_deg 0.00045).
+ENGAGE_STANDOFF_DEG = 0.00045
+
+
+def _force_of(state: Any, agent: str) -> str | None:
+    for force, members in (getattr(state, 'forces', None) or {}).items():
+        if agent in members:
+            return force
+    return None
+
+
+def _living_members(state: Any, forces: set[str]) -> list[str]:
+    """Agents vivants ET observés des forces données — un agent hors de
+    state.agents (force différée pas encore apparue) n'est pas ciblable,
+    un agent à available=False est détruit. Ordre déterministe."""
+    fmap = getattr(state, 'forces', None) or {}
+    return [a for f in sorted(forces) for a in fmap.get(f, ())
+            if a in state.agents and state.agents[a].get('available', True)]
+
+
+def _hostile_to(state: Any, target_forces: set[str]) -> set[str]:
+    """Forces ayant déclaré une relation hostile envers l'une des forces
+    données (les relations restent l'AUTORISATION : la cellule blanche les
+    revérifie à l'engagement)."""
+    relations = getattr(state, 'relations', None) or ()
+    return {src for src, targets, att in relations
+            if att == 'hostile' and target_forces & set(targets)}
 
 def goto_m(state: Any, agent: str, zone_name: str) -> list[tuple[Any, ...]] | bool:
     # Les zones viennent du Scenario Request via le superviseur
@@ -468,11 +495,26 @@ def attack_target_m(state: Any, agent: str, target: str) -> list[tuple[Any, ...]
     return [('attack_target', agent, target)]
 
 
+def poursuivre_m(state: Any, agent: str, cible: str) -> list[tuple[Any, ...]] | bool:
+    """Poursuite pure d'une cible désignée par la mission (référent porté par
+    le scénario, pattern transiter_vers_zone) : suivi NON borné, ne
+    s'auto-satisfait jamais."""
+    return follow_target_m(state, agent, cible, None)
+
+
 def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
-    follow = follow_target_m(state, agent, 'vedette_1', 0.00045)
-    if follow is False:
+    """Protégé = agent vivant des forces que MA force protège ; menace = agent
+    vivant d'une force hostile au protégé — dérivés des relations, plus proche
+    d'abord (convention _nearest_agent, « la menace, c'est la plus proche »)."""
+    my_force = _force_of(state, agent)
+    relations = getattr(state, 'relations', None) or ()
+    protege_forces = {t for src, targets, att in relations
+                      if att == 'protect' and src == my_force for t in targets}
+    threats = _living_members(state, _hostile_to(state, protege_forces))
+    threat = _nearest_agent(state, agent, threats)
+    if threat is None:
         # Pas de menace en vue (ou déjà détruite) : tenir le poste sur le
-        # convoi (§8.2 « station de l'escorte »). Sans cette branche,
+        # protégé (§8.2 « station de l'escorte »). Sans cette branche,
         # l'escorte reste au spawn pendant le transit et l'interception
         # devient une chasse arrière perdue (vedette 8 m/s > escorte 6 m/s,
         # run rig r-000004). Le suivi est NON borné : une station bornée plus
@@ -480,22 +522,36 @@ def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
         # jamais terminale (run r-000005) — c'est la replanification sur
         # changement de situation (controller) qui fait basculer vers
         # l'engagement quand la menace apparaît.
-        return follow_target_m(state, agent, 'cargo_1', None)
-    attack = attack_target_m(state, agent, 'vedette_1')
-    if attack is False:
+        protege = _nearest_agent(state, agent, _living_members(state, protege_forces))
+        if protege is None:
+            return False
+        return follow_target_m(state, agent, protege, None)
+    follow = follow_target_m(state, agent, threat, ENGAGE_STANDOFF_DEG)
+    attack = attack_target_m(state, agent, threat)
+    if not isinstance(follow, list) or not isinstance(attack, list):
         return False
     return follow + attack
 
 
-def repli_apres_perte_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
-    """Repli vers repli_nord si vedette_1 est détruite, sinon poursuite du
-    cargo — même convention d'état que follow_target_m (`available: False`
-    marque une destruction, cf. tsm/domain/conditions.py::agent_destroyed).
-    La poursuite est déléguée à la tâche déclarative poursuivre_cargo
-    (knowledge_base.json), que GTPyhop décompose à son tour."""
-    if not state.agents.get('vedette_1', {}).get('available', True):
-        return goto_m(state, agent, 'repli_nord')
-    return [('poursuivre_cargo', agent)]
+def repli_apres_perte_m(state: Any, agent: str,
+                        zone_de_repli: str) -> list[tuple[Any, ...]] | bool:
+    """Repli vers la zone donnée dès qu'un membre de MA force est détruit
+    (même convention d'état que follow_target_m : `available: False` marque
+    une destruction, cf. tsm/domain/conditions.py::agent_destroyed), sinon
+    poursuite du plus proche agent vivant d'une force que la mienne a
+    déclarée hostile."""
+    my_force = _force_of(state, agent)
+    members = (getattr(state, 'forces', None) or {}).get(my_force, ())
+    if any(m != agent and m in state.agents
+           and not state.agents[m].get('available', True) for m in members):
+        return goto_m(state, agent, zone_de_repli)
+    relations = getattr(state, 'relations', None) or ()
+    target_forces = {t for src, targets, att in relations
+                     if att == 'hostile' and src == my_force for t in targets}
+    target = _nearest_agent(state, agent, _living_members(state, target_forces))
+    if target is None:
+        return False
+    return follow_target_m(state, agent, target, None)
 
 
 def register_builtin() -> None:
@@ -507,6 +563,7 @@ def register_builtin() -> None:
     gtpyhop.declare_task_methods('orbiter', orbiter_m)
     gtpyhop.declare_task_methods('interposer', interposer_m)
     gtpyhop.declare_task_methods('transiter_vers_zone', goto_m)
+    gtpyhop.declare_task_methods('poursuivre', poursuivre_m)
     gtpyhop.declare_task_methods('escorter_convoi', escorter_convoi_m)
     gtpyhop.declare_task_methods('repli_apres_perte', repli_apres_perte_m)
 

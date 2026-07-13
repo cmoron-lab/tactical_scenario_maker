@@ -70,9 +70,10 @@ _PRIMITIVE_CAPABILITY = {
 # donc ici — union de TOUTES les branches que la doctrine peut prendre, pour
 # qu'« aucune dégradation silencieuse » ne survienne (le profil doit couvrir la
 # branche de repli comme la branche de poursuite). Les tâches déclaratives de
-# la KB (poursuivre_cargo…) sont dérivées par parcours, pas figées.
+# la KB restent dérivées par parcours, pas figées.
 _PYTHON_TASK_CAPABILITIES = {
     'transiter_vers_zone': frozenset({'navigation.goto'}),
+    'poursuivre': frozenset({'navigation.follow_target'}),
     'escorter_convoi': frozenset({'navigation.follow_target', 'engage.attack_target'}),
     'repli_apres_perte': frozenset({'navigation.goto', 'navigation.follow_target'}),
 }
@@ -134,13 +135,20 @@ def _noop_publish(event: Event) -> None:
 
 
 def _state_from_view(view: ForceView,
-                     zones: Mapping[str, tuple[float, float, float]] | None = None) -> Any:
+                     zones: Mapping[str, tuple[float, float, float]] | None = None,
+                     forces: Mapping[str, tuple[str, ...]] | None = None,
+                     relations: tuple[tuple[str, tuple[str, ...], str], ...] = ()) -> Any:
     """État GTPyhop NEUF depuis la vue — la forme exacte que lisent les méthodes
     v3 (state.agents[name] = {'pos': {...}, 'available': ...} ; state.zones =
-    {nom: (lat, lon, radius_deg)}, tirées du Scenario Request). Reconstruit à
-    chaque tick, jamais partagé ni muté entre superviseurs."""
+    {nom: (lat, lon, radius_deg)} ; state.forces = {force: (agents…)} ;
+    state.relations = ((source, cibles, attitude)…) — tout tiré du Scenario
+    Request : la doctrine dérive protégé/menace/perte de ces faits, aucun
+    référent en dur (P2). Reconstruit à chaque tick, jamais partagé ni muté
+    entre superviseurs."""
     state: Any = gtpyhop.State('view')
     state.zones = dict(zones or {})
+    state.forces = dict(forces or {})
+    state.relations = relations
     state.agents = {}
     for name, pos in view.world.positions.items():
         state.agents[name] = {
@@ -164,7 +172,9 @@ class MissionSupervisor:
                  mission_task: tuple[Any, ...] = (), timeout_s: float = 0.0,
                  update_threshold_deg: float = _DEFAULT_UPDATE_THRESHOLD_DEG,
                  publish_event: PublishEvent = _noop_publish,
-                 zones: Mapping[str, tuple[float, float, float]] | None = None) -> None:
+                 zones: Mapping[str, tuple[float, float, float]] | None = None,
+                 forces: Mapping[str, tuple[str, ...]] | None = None,
+                 relations: tuple[tuple[str, tuple[str, ...], str], ...] = ()) -> None:
         self._agent = agent
         self._force = force
         self._planner = planner
@@ -172,6 +182,8 @@ class MissionSupervisor:
         self._objectives = objectives
         self._mission_task = mission_task
         self._zones = dict(zones or {})
+        self._forces = dict(forces or {})
+        self._relations = relations
         self._timeout_s = timeout_s
         self._update_threshold_deg = update_threshold_deg
         self._publish = publish_event
@@ -185,8 +197,9 @@ class MissionSupervisor:
         if self.active_objective_id is not None:
             return
         world = view.world
-        plan = self._planner.find_plan(_state_from_view(view, self._zones),
-                                       self._mission_task)
+        plan = self._planner.find_plan(
+            _state_from_view(view, self._zones, self._forces, self._relations),
+            self._mission_task)
         if not plan:  # False / None / [] : idle ce tick, retentera au suivant
             return
         capability, parameters = self._translate(plan[0])
@@ -426,7 +439,11 @@ class RunController:
             update_threshold_deg=self._update_threshold_for(agent),
             publish_event=self._publish,
             zones={name: (z.lat, z.lon, z.radius_deg)
-                   for name, z in self._scenario.zones.items()})
+                   for name, z in self._scenario.zones.items()},
+            forces={name: spec.agents
+                    for name, spec in self._scenario.forces.items()},
+            relations=tuple((r.source, r.targets, r.attitude)
+                            for r in self._scenario.relations))
 
     def _providers_for(self, agent: str) -> dict[str, _Provider]:
         """Capacités déclarées ∩ implémentations disponibles. Une capacité sans

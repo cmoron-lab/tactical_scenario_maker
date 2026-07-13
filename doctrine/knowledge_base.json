@@ -281,30 +281,6 @@
         }
       ]
     },
-    "poursuivre_cargo": {
-      "label": "Doctrine Ormuz v3 : poursuivre cargo_1 (follow_target, sans stop_distance)",
-      "methods": [
-        {
-          "name": "Poursuite du cargo (cargo_1 présent et non détruit)",
-          "preconditions": [
-            {
-              "type": "agent_present",
-              "value": "cargo_1"
-            }
-          ],
-          "subtasks": [
-            {
-              "task": "follow_target",
-              "args": [
-                "__self__",
-                "cargo_1",
-                null
-              ]
-            }
-          ]
-        }
-      ]
-    },
     "reagir_conditions": {
       "label": "Réagit selon les conditions de la description",
       "methods": [
@@ -423,22 +399,30 @@
       ]
     },
     "transiter_vers_zone": {
-      "label": "Doctrine Ormuz v3 : transiter vers une zone nommée (goto)",
+      "label": "Doctrine v3 : transiter vers une zone nommée du scénario (goto)",
       "args": [
         "agent",
         "zone"
       ]
     },
+    "poursuivre": {
+      "label": "Doctrine v3 : poursuivre une cible désignée (follow_target sans stop_distance)",
+      "args": [
+        "agent",
+        "agent"
+      ]
+    },
     "escorter_convoi": {
-      "label": "Doctrine Ormuz v3 : escorter le convoi — poste tenu sur cargo_1 sans menace, follow_target puis attack_target sur vedette_1 sinon",
+      "label": "Doctrine v3 : escorter — poste tenu sur le protégé sans menace, interception (follow_target puis attack_target) sinon ; protégé et menace dérivés des relations du scénario",
       "args": [
         "agent"
       ]
     },
     "repli_apres_perte": {
-      "label": "Doctrine Ormuz v3 : repli vers repli_nord si vedette_1 détruite, sinon poursuivre_cargo",
+      "label": "Doctrine v3 : poursuite du plus proche hostile ; repli vers la zone donnée dès qu'un membre de sa force est détruit",
       "args": [
-        "agent"
+        "agent",
+        "zone"
       ]
     }
   },

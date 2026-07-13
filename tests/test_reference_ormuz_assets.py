@@ -27,18 +27,21 @@ def test_ormuz_profile_declares_only_selected_backends():
 # attendus par le superviseur (Task 5) — pas de couverture GTPyhop end-to-end
 # ici (le state v3 n'existe pas encore), juste les fonctions elles-mêmes.
 
-def _zones():
-    # Zones du Scenario Request réel — source unique, injectées dans l'état
-    # comme le fait le superviseur (state.zones).
+def _apply_facts(st):
+    # Zones, forces et relations du Scenario Request réel — source unique,
+    # injectées dans l'état comme le fait le superviseur (state.zones /
+    # state.forces / state.relations, cf. controller._state_from_view).
     scenario = load_reference_scenario('escorte_ormuz')
-    return {n: (z.lat, z.lon, z.radius_deg) for n, z in scenario.zones.items()}
+    st.zones = {n: (z.lat, z.lon, z.radius_deg) for n, z in scenario.zones.items()}
+    st.forces = {n: f.agents for n, f in scenario.forces.items()}
+    st.relations = tuple((r.source, r.targets, r.attitude) for r in scenario.relations)
+    return st
 
 
 def _state(agents):
     st = type('State', (), {})()
     st.agents = agents
-    st.zones = _zones()
-    return st
+    return _apply_facts(st)
 
 
 def test_goto_m_resolves_named_zone_to_position_and_radius():
@@ -70,52 +73,52 @@ def test_escorter_convoi_m_chains_follow_then_attack():
     ]
 
 
-def test_repli_apres_perte_m_retreats_once_vedette_1_destroyed():
+def test_repli_apres_perte_m_retreats_once_own_force_takes_a_loss():
+    # « Perte » dérivée de state.forces : vedette_1 est de la MÊME force que
+    # vedette_2 (rouge) — sa destruction déclenche le repli vers la zone
+    # passée en argument de mission.
     state = _state({'vedette_1': {'available': False}, 'cargo_1': {'available': True}})
-    plan = methods.repli_apres_perte_m(state, 'vedette_2')
+    plan = methods.repli_apres_perte_m(state, 'vedette_2', 'repli_nord')
     assert plan == [('goto', 'vedette_2', (26.5530, 56.4060), 0.00015)]
 
 
-def test_repli_apres_perte_m_delegates_to_poursuivre_cargo_while_vedette_1_lives():
-    # poursuivre_cargo est déclaratif (doctrine/knowledge_base.json) : la
-    # méthode Python délègue la poursuite à la tâche KB, elle n'émet pas la
-    # primitive elle-même — la décomposition complète est couverte par le
-    # test Planner ci-dessous.
+def test_repli_apres_perte_m_pursues_nearest_hostile_while_force_intact():
+    # Branche nominale dérivée des relations : rouge est hostile à bleue et
+    # verte — cargo_1 est le seul membre vivant observé, il est poursuivi.
     state = _state({'vedette_1': {'available': True}, 'cargo_1': {'available': True}})
-    plan = methods.repli_apres_perte_m(state, 'vedette_2')
-    assert plan == [('poursuivre_cargo', 'vedette_2')]
+    plan = methods.repli_apres_perte_m(state, 'vedette_2', 'repli_nord')
+    assert plan == [('follow_target', 'vedette_2', 'cargo_1', None)]
 
 
 # ── Garde de régression sur le câblage réel : register_builtin (méthodes
-# Python) + register_kb (poursuivre_cargo déclaratif) + declare_actions
-# (primitives pures) doivent aboutir aux tuples primitifs exacts via le
-# vrai Planner, pas seulement via les fonctions appelées à la main.
+# Python) + declare_actions (primitives pures) doivent aboutir aux tuples
+# primitifs exacts via le vrai Planner, pas seulement via les fonctions
+# appelées à la main.
 
 def test_find_plan_produces_primitive_tuples_through_real_registration():
     planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
-    state = gtpyhop.State('ormuz')
-    state.zones = _zones()
+    state = _apply_facts(gtpyhop.State('ormuz'))
     state.agents = {
-        'cargo_1': {'available': True},
-        'escorte': {'available': True},
-        'vedette_1': {'available': True},
-        'vedette_2': {'available': True},
+        'cargo_1': {'available': True, 'pos': {'lat': 26.5520, 'lon': 56.4000}},
+        'escorte': {'available': True, 'pos': {'lat': 26.5518, 'lon': 56.4000}},
+        'vedette_1': {'available': True, 'pos': {'lat': 26.5530, 'lon': 56.4020}},
+        'vedette_2': {'available': True, 'pos': {'lat': 26.5532, 'lon': 56.4030}},
     }
-    # Déclaratif (KB) : poursuivre_cargo -> follow_target cargo_1
-    assert planner.find_plan(state, ('poursuivre_cargo', 'vedette_1')) == \
+    # poursuivre : cible désignée par la mission (référent du scénario)
+    assert planner.find_plan(state, ('poursuivre', 'vedette_1', 'cargo_1')) == \
         [('follow_target', 'vedette_1', 'cargo_1', None)]
-    # Python (register_builtin) : escorter_convoi -> follow puis attack
+    # escorter_convoi : menace = plus proche hostile au protégé (relations)
     assert planner.find_plan(state, ('escorter_convoi', 'escorte')) == [
         ('follow_target', 'escorte', 'vedette_1', 0.00045),
         ('attack_target', 'escorte', 'vedette_1'),
     ]
-    # Chaîne mixte Python -> KB : repli délègue à poursuivre_cargo
-    assert planner.find_plan(state, ('repli_apres_perte', 'vedette_2')) == \
+    # repli_apres_perte nominal : poursuite du plus proche hostile (cargo_1
+    # est plus près de vedette_2 que l'escorte)
+    assert planner.find_plan(state, ('repli_apres_perte', 'vedette_2', 'repli_nord')) == \
         [('follow_target', 'vedette_2', 'cargo_1', None)]
-    # cargo_1 détruit : la précondition agent_present de la KB rend
-    # poursuivre_cargo inapplicable
+    # cible détruite : poursuivre devient inapplicable
     state.agents['cargo_1']['available'] = False
-    assert planner.find_plan(state, ('poursuivre_cargo', 'vedette_1')) is False
+    assert planner.find_plan(state, ('poursuivre', 'vedette_1', 'cargo_1')) is False
 
 
 # ── Poste tenu : un suivi borné déjà satisfait se décompose en [], sinon le
@@ -124,8 +127,7 @@ def test_find_plan_produces_primitive_tuples_through_real_registration():
 # d'escorter_convoi ne serait jamais soumise (livelock).
 
 def _planner_state(positions):
-    state = gtpyhop.State('ormuz_pos')
-    state.zones = _zones()
+    state = _apply_facts(gtpyhop.State('ormuz_pos'))
     state.agents = {name: {'available': True, 'pos': {'lat': lat, 'lon': lon}}
                     for name, (lat, lon) in positions.items()}
     return state
@@ -147,7 +149,7 @@ def test_escorter_convoi_far_from_threat_still_follows_first():
 
 
 def test_follow_target_m_without_stop_distance_never_self_satisfies():
-    # Poursuite pure (poursuivre_cargo) : même à distance nulle, le suivi
+    # Poursuite pure (poursuivre) : même à distance nulle, le suivi
     # reste émis — seul un suivi borné (stop_distance) peut être « tenu ».
     state = _state({
         'vedette_2': {'available': True, 'pos': {'lat': 26.5530, 'lon': 56.4020}},
