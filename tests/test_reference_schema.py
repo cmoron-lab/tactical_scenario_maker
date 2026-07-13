@@ -114,3 +114,11 @@ def test_load_reference_scenario_reads_from_directory(tmp_path):
 def test_load_reference_scenario_missing_file_raises(tmp_path):
     with pytest.raises(ScenarioError, match="introuvable"):
         load_reference_scenario("absent", directory=tmp_path)
+
+
+def test_save_reference_scenario_round_trips(tmp_path):
+    from tsm.domain.reference import (load_reference_scenario,
+                                      save_reference_scenario)
+    scenario = load_reference_scenario('escorte_ormuz')
+    save_reference_scenario('copie_ormuz', scenario, directory=tmp_path)
+    assert load_reference_scenario('copie_ormuz', directory=tmp_path) == scenario

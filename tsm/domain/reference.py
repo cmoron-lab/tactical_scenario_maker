@@ -330,3 +330,11 @@ def load_reference_scenario(name: str, directory: Path = SCENARIOS_DIR) -> Refer
         raise ScenarioError(f'scénario introuvable: {name}')
     with open(path, encoding='utf-8') as f:
         return ReferenceScenario.from_dict(json.load(f))
+
+
+def save_reference_scenario(name: str, scenario: ReferenceScenario,
+                            directory: Path | None = None) -> None:
+    path = _path(name, directory if directory is not None else SCENARIOS_DIR)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(scenario.to_dict(), f, ensure_ascii=False, indent=2)
+        f.write('\n')

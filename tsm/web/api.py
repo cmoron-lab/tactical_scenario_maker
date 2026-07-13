@@ -6,7 +6,8 @@ from typing import Any
 from tsm.domain import doctrine
 from tsm.domain.profile import list_profiles
 from tsm.domain.reference import SCHEMA_VERSION as SCENARIO_V2_VERSION
-from tsm.domain.reference import load_reference_scenario
+from tsm.domain.reference import (ReferenceScenario, load_reference_scenario,
+                                  save_reference_scenario)
 from tsm.domain.scenario import (Scenario, ScenarioError, delete_scenario,
                                  list_scenarios, load_scenario, peek_version,
                                  save_scenario)
@@ -42,7 +43,10 @@ class Api:
         return load_scenario(name).to_dict()
 
     def save_scenario(self, name: str, doc: dict[str, Any]) -> dict[str, Any]:
-        save_scenario(name, Scenario.from_dict(doc))
+        if doc.get('version') == SCENARIO_V2_VERSION:
+            save_reference_scenario(name, ReferenceScenario.from_dict(doc))
+        else:
+            save_scenario(name, Scenario.from_dict(doc))
         return {'ok': True}
 
     def delete_scenario(self, name: str) -> dict[str, Any]:

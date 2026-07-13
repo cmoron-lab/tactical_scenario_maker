@@ -2,7 +2,11 @@ import json
 import sys
 import threading
 from http.client import HTTPConnection
+from pathlib import Path
 
+import pytest
+
+from tsm.domain.scenario import ScenarioError
 from tsm.web.api import Api
 from tsm.web.runs import RunManager
 from tsm.web.server import make_server
@@ -197,3 +201,25 @@ def test_run_artifact_404_when_missing_then_200_once_present(tmp_path):
         assert status == 404
     finally:
         srv.shutdown()
+
+
+# ── Task 1 : sauvegarde v2 côté serveur ───────────────────────────────────────
+
+def test_save_scenario_v2_validates_then_writes(tmp_path, monkeypatch):
+    import tsm.domain.reference as reference
+    monkeypatch.setattr(reference, 'SCENARIOS_DIR', tmp_path)
+    import tsm.domain.scenario as scenario_mod
+    monkeypatch.setattr(scenario_mod, 'SCENARIOS_DIR', tmp_path)
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    assert api.save_scenario('mon_v2', doc) == {'ok': True}
+    assert (tmp_path / 'mon_v2.json').exists()
+
+
+def test_save_scenario_v2_invalid_is_rejected_in_french(tmp_path, monkeypatch):
+    import tsm.domain.reference as reference
+    monkeypatch.setattr(reference, 'SCENARIOS_DIR', tmp_path)
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    with pytest.raises(ScenarioError, match='forces manquant'):
+        api.save_scenario('casse', {'version': 2, 'information_policy': 'omniscient'})
+    assert not (tmp_path / 'casse.json').exists()
