@@ -103,6 +103,16 @@ def required_capabilities_for_task(kb: Mapping[str, Any], task_name: str,
     return caps
 
 
+def v3_mission_tasks(kb: Mapping[str, Any]) -> list[str]:
+    """Tâches offrables comme mission d'un scénario v2 : les tâches Python
+    (décomposition figée dans _PYTHON_TASK_CAPABILITIES) et les tâches
+    déclaratives de la KB qui atteignent au moins une primitive v3."""
+    names = set(_PYTHON_TASK_CAPABILITIES)
+    names.update(t for t in kb.get('tasks', {})
+                 if required_capabilities_for_task(kb, t))
+    return sorted(names)
+
+
 class RunStartError(RuntimeError):
     """Préflight refusé : profil incompatible, spawn raté ou service
     indisponible. Levée AVANT toute création de superviseur ; aucun superviseur

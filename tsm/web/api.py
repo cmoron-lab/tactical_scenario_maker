@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from tsm.domain import doctrine
-from tsm.domain.profile import list_profiles
+from tsm.domain.profile import ProfileError, list_profiles, load_profile, validate_profile
 from tsm.domain.reference import SCHEMA_VERSION as SCENARIO_V2_VERSION
 from tsm.domain.reference import (ReferenceScenario, load_reference_scenario,
                                   save_reference_scenario)
@@ -12,6 +12,7 @@ from tsm.domain.scenario import (Scenario, ScenarioError, delete_scenario,
                                  list_scenarios, load_scenario, peek_version,
                                  save_scenario)
 from tsm.execution.actions import aller_a, creation_agent
+from tsm.execution.controller import required_capabilities_for_task, v3_mission_tasks
 from tsm.planning.planner import Planner, build_state
 from tsm.web.runs import REPO_ROOT, RunManager
 
@@ -30,7 +31,9 @@ class Api:
         return list_profiles()
 
     def get_kb(self) -> dict[str, Any]:
-        return doctrine.load()
+        kb = doctrine.load()
+        kb['v3_tasks'] = v3_mission_tasks(kb)
+        return kb
 
     def save_kb(self, kb: dict[str, Any]) -> dict[str, Any]:
         doctrine.save(kb)
@@ -48,6 +51,23 @@ class Api:
         else:
             save_scenario(name, Scenario.from_dict(doc))
         return {'ok': True}
+
+    def validate_scenario(self, doc: Any, profile_name: Any) -> dict[str, Any]:
+        """Validation à l'édition (§4.5) : schéma v2 + couple scénario/profil.
+        Le résultat est la donnée (toujours 200, y compris profil inconnu —
+        ProfileError est un résultat) ; seul un corps incomplet fait un 400."""
+        if not isinstance(doc, dict) or not isinstance(profile_name, str) or not profile_name:
+            raise ScenarioError("corps attendu: {'scenario': <document v2>, 'profile': '<nom>'}")
+        try:
+            scenario = ReferenceScenario.from_dict(doc)
+            profile = load_profile(profile_name)
+            kb = doctrine.load()
+            required = {agent: required_capabilities_for_task(kb, spec.mission.task)
+                        for agent, spec in scenario.agents.items()}
+            validate_profile(scenario, profile, required)
+        except (ScenarioError, ProfileError) as e:
+            return {'ok': False, 'errors': [str(e)]}
+        return {'ok': True, 'errors': []}
 
     def delete_scenario(self, name: str) -> dict[str, Any]:
         delete_scenario(name)

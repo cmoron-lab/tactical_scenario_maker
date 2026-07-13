@@ -47,6 +47,8 @@ def _route(method: str, path: str):
             return 'save_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'launch':
             return 'launch_scenario', {'name': parts[2]}
+        if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'validate':
+            return 'validate_scenario', {'name': parts[2]}
         if parts == ['api', 'generate-scenario']:
             return 'generate_scenario', {}
     if method == 'DELETE':
@@ -118,6 +120,10 @@ class _Handler(BaseHTTPRequestHandler):
             elif action == 'launch_scenario':
                 body = self._read_json_or_empty()
                 self._send_json(self.api.launch(params['name'], body.get('profile')))
+            elif action == 'validate_scenario':
+                body = self._read_json()
+                self._send_json(self.api.validate_scenario(body.get('scenario'),
+                                                           body.get('profile')))
             elif action == 'run_artifact':
                 self._send_json(self.api.run_artifact(params['run_id'], params['kind']))
             elif action == 'run_status':

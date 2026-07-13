@@ -223,3 +223,35 @@ def test_save_scenario_v2_invalid_is_rejected_in_french(tmp_path, monkeypatch):
     with pytest.raises(ScenarioError, match='forces manquant'):
         api.save_scenario('casse', {'version': 2, 'information_policy': 'omniscient'})
     assert not (tmp_path / 'casse.json').exists()
+
+
+# ── Task 2 : validation à l'édition + tâches v3 exposées ─────────────────────
+
+def test_kb_exposes_v3_mission_tasks(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    kb = api.get_kb()
+    assert 'poursuivre' in kb['v3_tasks']
+    assert 'escorter_convoi' in kb['v3_tasks']
+    assert 'transiter_vers_zone' in kb['v3_tasks']
+    assert 'veiller' not in kb['v3_tasks']  # tâche v1 : ne décompose pas en primitives v3
+
+
+def test_validate_scenario_ok_for_reference_pair(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    assert api.validate_scenario(doc, 'kinematic-ormuz') == {'ok': True, 'errors': []}
+
+
+def test_validate_scenario_reports_missing_capability_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['cargo_1']['mission'] = {'task': 'escorter_convoi', 'args': ['cargo_1']}
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('cargo_1' in e and 'manquante' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_schema_errors(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    result = api.validate_scenario({'version': 2}, 'kinematic-ormuz')
+    assert result['ok'] is False and result['errors']
