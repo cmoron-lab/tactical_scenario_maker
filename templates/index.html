@@ -2066,11 +2066,11 @@ function renderEditorV2(name, isNew) {
     <div id="launch-status"></div>
   `;
   renderV2Zones();
-  if (typeof renderV2Forces === 'function') renderV2Forces();
-  if (typeof renderV2Relations === 'function') renderV2Relations();
-  if (typeof renderV2Agents === 'function') renderV2Agents();
-  if (typeof renderV2Triggers === 'function') renderV2Triggers();
-  if (typeof renderV2End === 'function') renderV2End();
+  renderV2Forces();
+  renderV2Relations();
+  renderV2Agents();
+  renderV2Triggers();
+  renderV2End();
   fetch('/api/profiles').then(r => r.json()).then(names => {
     const sel = document.getElementById('profile-select');
     if (!sel) return;
@@ -2366,6 +2366,132 @@ function validateScenarioV2() {
     if (d.ok) showV2Status(`✓ Compatible avec le profil ${profile}.`, false);
     else showV2Status((d.errors || [d.error || 'validation échouée']).join(' — '), true);
   });
+}
+
+const V2_CONDITION_TYPES = [
+  { id: 'in_zone', label: 'agent dans une zone' },
+  { id: 'all_in_zone', label: 'toute une force dans une zone' },
+  { id: 'agent_destroyed', label: 'destruction (agent ou force)' },
+];
+
+function v2CondAt(loc, i) {
+  return loc === 'trigger' ? v2doc.triggers[i].when : v2doc.end[loc][i];
+}
+
+function setV2CondType(loc, i, type) {
+  const fresh = {
+    in_zone: { type, agent: '', zone: '' },
+    all_in_zone: { type, force: '', zone: '' },
+    agent_destroyed: { type, agent: '' },
+  }[type];
+  if (loc === 'trigger') v2doc.triggers[i].when = fresh;
+  else v2doc.end[loc][i] = fresh;
+  renderV2Triggers(); renderV2End();
+}
+
+function setV2CondField(loc, i, field, value) {
+  const c = v2CondAt(loc, i);
+  if (field === 'porteur') {           // agent_destroyed : agent OU force
+    delete c.agent; delete c.force;
+    const [kind, name] = value.split(':');
+    if (name) c[kind] = name;
+    return;
+  }
+  c[field] = value;
+}
+
+function buildV2ConditionForm(loc, i) {
+  const c = v2CondAt(loc, i);
+  const zoneSel = (field) => `
+    <div class="field"><label>Zone</label>
+      <select onchange="setV2CondField('${loc}', ${i}, '${field}', this.value)">
+        <option value="">—</option>
+        ${Object.keys(v2doc.zones).map(z => `<option value="${z}" ${c[field] === z ? 'selected' : ''}>${escHtml(z)}</option>`).join('')}
+      </select></div>`;
+  let fields = '';
+  if (c.type === 'in_zone') {
+    fields = `
+      <div class="field"><label>Agent</label>
+        <select onchange="setV2CondField('${loc}', ${i}, 'agent', this.value)">
+          <option value="">—</option>
+          ${Object.keys(v2doc.agents).map(a => `<option value="${a}" ${c.agent === a ? 'selected' : ''}>${escHtml(a)}</option>`).join('')}
+        </select></div>` + zoneSel('zone');
+  } else if (c.type === 'all_in_zone') {
+    fields = `
+      <div class="field"><label>Force</label>
+        <select onchange="setV2CondField('${loc}', ${i}, 'force', this.value)">
+          <option value="">—</option>
+          ${Object.keys(v2doc.forces).map(f => `<option value="${f}" ${c.force === f ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
+        </select></div>` + zoneSel('zone');
+  } else {
+    const current = c.agent ? `agent:${c.agent}` : (c.force ? `force:${c.force}` : '');
+    fields = `
+      <div class="field"><label>Porteur</label>
+        <select onchange="setV2CondField('${loc}', ${i}, 'porteur', this.value)">
+          <option value="">—</option>
+          <optgroup label="Agents">
+            ${Object.keys(v2doc.agents).map(a => `<option value="agent:${a}" ${current === 'agent:' + a ? 'selected' : ''}>${escHtml(a)}</option>`).join('')}
+          </optgroup>
+          <optgroup label="Forces">
+            ${Object.keys(v2doc.forces).map(f => `<option value="force:${f}" ${current === 'force:' + f ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
+          </optgroup>
+        </select></div>`;
+  }
+  return `
+    <div class="field"><label>Type</label>
+      <select onchange="setV2CondType('${loc}', ${i}, this.value)">
+        ${V2_CONDITION_TYPES.map(t => `<option value="${t.id}" ${c.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
+      </select></div>${fields}`;
+}
+
+function renderV2Triggers() {
+  const rows = v2doc.triggers.map((t, i) => `
+    <div class="form-grid">
+      <div class="field"><label>Id</label>
+        <input value="${escHtml(t.id)}" onchange="v2doc.triggers[${i}].id = this.value.trim()"></div>
+      ${buildV2ConditionForm('trigger', i)}
+      <div class="field"><label>Action : déployer la force</label>
+        <select onchange="v2doc.triggers[${i}].do = [{type: 'spawn_force', force: this.value}]">
+          <option value="">—</option>
+          ${Object.keys(v2doc.forces).map(f => `<option value="${f}" ${t.do?.[0]?.force === f ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>&nbsp;</label>
+        <button class="agent-remove" onclick="v2doc.triggers.splice(${i}, 1); renderV2Triggers()">Supprimer</button></div>
+    </div>`).join('');
+  document.getElementById('v2-triggers').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Triggers</span>
+        <button class="btn btn-ghost" onclick="v2doc.triggers.push({id: 'trigger-' + (v2doc.triggers.length + 1), when: {type: 'in_zone', agent: '', zone: ''}, do: []}); renderV2Triggers()">+ Trigger</button></div>
+      <div class="exec-card-body">${rows || '<p class="exec-empty">Aucun trigger.</p>'}</div>
+    </div>`;
+}
+
+function renderV2End() {
+  const condList = (loc, label) => {
+    const items = v2doc.end[loc].map((c, i) => `
+      <div class="form-grid">
+        ${buildV2ConditionForm(loc, i)}
+        <div class="field"><label>&nbsp;</label>
+          <button class="agent-remove" onclick="v2doc.end['${loc}'].splice(${i}, 1); renderV2End()">Supprimer</button></div>
+      </div>`).join('');
+    return `
+      <div class="exec-info-row"><span class="exec-info-label">${label}</span>
+        <span class="exec-info-val">
+          <button class="btn btn-ghost" onclick="v2doc.end['${loc}'].push({type: 'all_in_zone', force: '', zone: ''}); renderV2End()">+ Condition</button>
+        </span></div>${items}`;
+  };
+  document.getElementById('v2-end').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Fin de scénario</span></div>
+      <div class="exec-card-body">
+        ${condList('success', 'Succès')}
+        ${condList('failure', 'Échec')}
+        <div class="form-grid">
+          <div class="field"><label>Timeout (ISO 8601, ex. PT240S)</label>
+            <input value="${escHtml(v2doc.end.timeout)}" onchange="v2doc.end.timeout = this.value.trim()"></div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function parseMission(m) {
