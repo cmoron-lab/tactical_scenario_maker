@@ -2145,6 +2145,195 @@ function v2ValidName(name) {
   return false;
 }
 
+const V2_ATTITUDES = ['hostile', 'neutral', 'allied', 'protect'];
+
+function renderV2Forces() {
+  const agentNames = Object.keys(v2doc.agents);
+  const rows = Object.entries(v2doc.forces).map(([fname, f]) => `
+    <div class="form-grid">
+      <div class="field"><label>Nom</label>
+        <input value="${escHtml(fname)}" onchange="renameV2Force('${fname}', this.value)"></div>
+      <div class="field"><label>Agents</label>
+        <select multiple size="3" onchange="setV2ForceAgents('${fname}', this)">
+          ${agentNames.map(a => `<option value="${a}" ${f.agents.includes(a) ? 'selected' : ''}>${escHtml(a)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Spawn</label>
+        <select onchange="v2doc.forces['${fname}'].spawn = this.value">
+          <option value="initial" ${f.spawn !== 'deferred' ? 'selected' : ''}>initial</option>
+          <option value="deferred" ${f.spawn === 'deferred' ? 'selected' : ''}>différé</option>
+        </select></div>
+      <div class="field"><label>&nbsp;</label>
+        <button class="agent-remove" onclick="deleteV2Force('${fname}')">Supprimer</button></div>
+    </div>`).join('');
+  document.getElementById('v2-forces').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Forces</span>
+        <button class="btn btn-ghost" onclick="addV2Force()">+ Force</button></div>
+      <div class="exec-card-body">${rows || '<p class="exec-empty">Aucune force.</p>'}</div>
+    </div>`;
+}
+
+function addV2Force() {
+  let n = 1;
+  while (v2doc.forces[`force_${n}`]) n++;
+  v2doc.forces[`force_${n}`] = { agents: [] };
+  renderV2Forces();
+}
+
+function renameV2Force(oldName, newName) {
+  newName = newName.trim();
+  if (!v2ValidName(newName)) { renderV2Forces(); renderV2Relations(); return; }
+  if (newName === oldName || v2doc.forces[newName]) { renderV2Forces(); renderV2Relations(); return; }
+  v2doc.forces[newName] = v2doc.forces[oldName];
+  delete v2doc.forces[oldName];
+  // répercuter dans les relations (from/to) — sinon référence pendante
+  for (const r of v2doc.relations) {
+    if (r.from === oldName) r.from = newName;
+    r.to = r.to.map(t => t === oldName ? newName : t);
+  }
+  renderV2Forces(); renderV2Relations();
+}
+
+function deleteV2Force(name) {
+  delete v2doc.forces[name];
+  v2doc.relations = v2doc.relations.filter(r =>
+    r.from !== name && (r.to = r.to.filter(t => t !== name)).length);
+  renderV2Forces(); renderV2Relations();
+}
+
+function setV2ForceAgents(fname, sel) {
+  v2doc.forces[fname].agents = Array.from(sel.selectedOptions).map(o => o.value);
+}
+
+function renderV2Relations() {
+  const forceNames = Object.keys(v2doc.forces);
+  const rows = v2doc.relations.map((r, i) => `
+    <div class="form-grid">
+      <div class="field"><label>De</label>
+        <select onchange="v2doc.relations[${i}].from = this.value">
+          ${forceNames.map(f => `<option value="${f}" ${r.from === f ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Vers</label>
+        <select multiple size="3" onchange="v2doc.relations[${i}].to = Array.from(this.selectedOptions).map(o => o.value)">
+          ${forceNames.map(f => `<option value="${f}" ${r.to.includes(f) ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Attitude</label>
+        <select onchange="v2doc.relations[${i}].attitude = this.value">
+          ${V2_ATTITUDES.map(a => `<option value="${a}" ${r.attitude === a ? 'selected' : ''}>${a}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>&nbsp;</label>
+        <button class="agent-remove" onclick="v2doc.relations.splice(${i}, 1); renderV2Relations()">Supprimer</button></div>
+    </div>`).join('');
+  document.getElementById('v2-relations').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Relations</span>
+        <button class="btn btn-ghost" onclick="v2doc.relations.push({from: Object.keys(v2doc.forces)[0] || '', to: [], attitude: 'hostile'}); renderV2Relations()">+ Relation</button></div>
+      <div class="exec-card-body">${rows || '<p class="exec-empty">Aucune relation.</p>'}</div>
+    </div>`;
+}
+
+function v2MissionArgKinds(task) {
+  // leaf_tasks[].args décrit la signature (args[0] = l'agent lui-même) ;
+  // une tâche déclarative de la KB sans entrée leaf_tasks est mono-agent.
+  const leaf = kbData?.leaf_tasks?.[task];
+  return (leaf?.args || ['agent']).slice(1);
+}
+
+function renderV2Agents() {
+  const tasks = kbData?.v3_tasks || [];
+  const cards = Object.entries(v2doc.agents).map(([aname, a]) => {
+    const kinds = v2MissionArgKinds(a.mission.task);
+    const extras = a.mission.args.slice(1);
+    const argWidgets = kinds.map((kind, k) => {
+      const options = kind === 'zone' ? Object.keys(v2doc.zones)
+                    : Object.keys(v2doc.agents).filter(n => n !== aname);
+      return `
+      <div class="field"><label>Argument ${k + 1} (${kind})</label>
+        <select onchange="setV2MissionArg('${aname}', ${k}, this.value)">
+          <option value="">—</option>
+          ${options.map(o => `<option value="${o}" ${extras[k] === o ? 'selected' : ''}>${escHtml(o)}</option>`).join('')}
+        </select></div>`;
+    }).join('');
+    return `
+    <div class="agent-card">
+      <div class="agent-head">
+        <span class="agent-type-chip">Agent</span>
+        <span class="agent-name-display">
+          <input value="${escHtml(aname)}" onchange="renameV2Agent('${aname}', this.value)"></span>
+        <button class="agent-remove" onclick="deleteV2Agent('${aname}')">Supprimer</button>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Plateforme</label>
+          <input value="${escHtml(a.platform)}" placeholder="surface_vessel"
+            onchange="v2doc.agents['${aname}'].platform = this.value"></div>
+        <div class="field"><label>Latitude</label>
+          <input type="number" step="any" value="${a.position.lat}"
+            onchange="v2doc.agents['${aname}'].position.lat = parseFloat(this.value)"></div>
+        <div class="field"><label>Longitude</label>
+          <input type="number" step="any" value="${a.position.lon}"
+            onchange="v2doc.agents['${aname}'].position.lon = parseFloat(this.value)"></div>
+        <div class="field"><label>Mission</label>
+          <select onchange="setV2MissionTask('${aname}', this.value)">
+            ${tasks.map(t => `<option value="${t}" ${a.mission.task === t ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}
+          </select></div>
+        ${argWidgets}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('v2-agents').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Agents</span>
+        <button class="btn btn-ghost" onclick="addV2Agent()">+ Agent</button></div>
+    </div>${cards}`;
+}
+
+function addV2Agent() {
+  let n = 1;
+  while (v2doc.agents[`agent_${n}`]) n++;
+  const name = `agent_${n}`;
+  const firstTask = (kbData?.v3_tasks || ['transiter_vers_zone'])[0];
+  v2doc.agents[name] = {
+    platform: 'surface_vessel',
+    position: { lat: 26.5500, lon: 56.4000 },
+    mission: { task: firstTask, args: [name] },
+    conditions: {},
+  };
+  renderV2Agents(); renderV2Forces();
+}
+
+function renameV2Agent(oldName, newName) {
+  newName = newName.trim();
+  if (!v2ValidName(newName)) { renderV2Agents(); return; }
+  if (newName === oldName || v2doc.agents[newName]) { renderV2Agents(); return; }
+  v2doc.agents[newName] = v2doc.agents[oldName];
+  delete v2doc.agents[oldName];
+  const m = v2doc.agents[newName].mission;
+  m.args = m.args.map(x => x === oldName ? newName : x);
+  for (const a of Object.values(v2doc.agents))
+    a.mission.args = a.mission.args.map(x => x === oldName ? newName : x);
+  for (const f of Object.values(v2doc.forces))
+    f.agents = f.agents.map(x => x === oldName ? newName : x);
+  renderV2Agents(); renderV2Forces();
+}
+
+function deleteV2Agent(name) {
+  delete v2doc.agents[name];
+  for (const f of Object.values(v2doc.forces))
+    f.agents = f.agents.filter(x => x !== name);
+  renderV2Agents(); renderV2Forces();
+}
+
+function setV2MissionTask(aname, task) {
+  v2doc.agents[aname].mission = { task, args: [aname] };  // les extras repartent vides
+  renderV2Agents();
+}
+
+function setV2MissionArg(aname, k, value) {
+  const args = v2doc.agents[aname].mission.args;
+  while (args.length < k + 2) args.push('');
+  args[k + 1] = value;
+}
+
 function saveScenarioV2() {
   const name = document.getElementById('sc-name-inp').value.trim();
   if (!name) { showV2Status('Nom de scénario requis.', true); return; }
