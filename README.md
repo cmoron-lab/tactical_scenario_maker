@@ -26,8 +26,10 @@ En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
 
     # 1. Simulation : le launcher upstream lance gz, les nœuds ROS
     #    vivent dans les plugins gz — rien d'autre à démarrer.
+    #    hormuz.world ancre la scène dans le vrai détroit (scénario de
+    #    référence) ; sans argument : lotusim.world (Singapour, scénarios v1).
     docker exec -d tsm-e2e bash -lc \
-      '/lotusim_ws/src/LOTUSim/launch/lotusim run > /tmp/gz.log 2>&1'
+      '/lotusim_ws/src/LOTUSim/launch/lotusim run hormuz.world > /tmp/gz.log 2>&1'
 
     # 2. Ce serveur, dans le conteneur (les runtimes spawnés sont rclpy).
     docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \

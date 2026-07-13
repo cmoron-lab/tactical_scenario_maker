@@ -30,9 +30,9 @@ def test_trigger_spawns_red_once_when_cargo_enters_chokepoint():
     cell = WhiteCell(ormuz_scenario(), ormuz_profile(), store,
                      spawn_force=spawned.append, delete_vessel=lambda _: None,
                      publish_event=lambda _: None, stop=lambda _: None)
-    cell.tick(snapshot(0, {"cargo_1": (1.2600, 103.7500)}))
-    cell.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500)}))
-    cell.tick(snapshot(2, {"cargo_1": (1.2621, 103.7500)}))
+    cell.tick(snapshot(0, {"cargo_1": (26.5500, 56.4000)}))
+    cell.tick(snapshot(1, {"cargo_1": (26.5520, 56.4000)}))
+    cell.tick(snapshot(2, {"cargo_1": (26.5521, 56.4000)}))
     assert spawned == ["rouge"]
 
 
@@ -173,7 +173,7 @@ def test_verdict_is_terminal_and_triggers_stop_after_it():
     cell.tick(snapshot(0, {}))
     assert cell.tick(snapshot(5.0, {})) is Verdict.TIMED_OUT
     # Une fois terminal : le verdict est figé et les triggers ne s'arment plus.
-    assert cell.tick(snapshot(6.0, {"cargo_1": (1.2620, 103.7500)})) is Verdict.TIMED_OUT
+    assert cell.tick(snapshot(6.0, {"cargo_1": (26.5520, 56.4000)})) is Verdict.TIMED_OUT
     assert spawned == []
 
 
@@ -197,8 +197,8 @@ def test_spawn_unavailable_forces_failed_verdict():
         raise RunStartError("service de spawn indisponible")
 
     cell = _cell(spawn_force=failing_spawn, publish_event=events.append)
-    cell.tick(snapshot(0, {"cargo_1": (1.2600, 103.7500)}))  # hors passe
-    verdict = cell.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500)}))  # trigger
+    cell.tick(snapshot(0, {"cargo_1": (26.5500, 56.4000)}))  # hors passe
+    verdict = cell.tick(snapshot(1, {"cargo_1": (26.5520, 56.4000)}))  # trigger
     assert verdict is Verdict.FAILED
     assert cell.verdict_reason == "spawn_unavailable"  # exposé au contrôleur
     verdict_events = [e for e in events if e.kind == "verdict"]
@@ -221,7 +221,7 @@ def test_same_tick_verdict_freezes_adjudication_no_zombie_delete():
     # t=2.5 : attaque due (PT2S) ET cargo_1 dans la passe → trigger → spawn rate.
     verdict = cell.tick(snapshot(2.5, {"escorte": (1.0, 2.0),
                                        "vedette_1": (1.0001, 2.0),
-                                       "cargo_1": (1.2620, 103.7500)}))
+                                       "cargo_1": (26.5520, 56.4000)}))
     assert verdict is Verdict.FAILED
     assert deleted == []
     assert cell.drain_attack_updates() == []
@@ -251,7 +251,7 @@ def test_unknown_trigger_action_raises_scenario_error():
 def test_publish_emits_whitecellevent_instances():
     events = []
     cell = _cell(publish_event=events.append)
-    cell.tick(snapshot(0, {"cargo_1": (1.2600, 103.7500)}))
-    cell.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500)}))  # trigger fires
+    cell.tick(snapshot(0, {"cargo_1": (26.5500, 56.4000)}))
+    cell.tick(snapshot(1, {"cargo_1": (26.5520, 56.4000)}))  # trigger fires
     assert any(isinstance(e, WhiteCellEvent) and e.kind == "trigger_fired"
                for e in events)

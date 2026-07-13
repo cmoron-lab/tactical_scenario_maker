@@ -18,22 +18,22 @@ from tsm.execution.white_cell import Verdict
 def test_ormuz_full_chain_reaches_success_verdict():
     runtime, fake = in_memory_runtime("escorte_ormuz", "kinematic-ormuz")
     runtime.start()
-    runtime.tick(fake.snapshot(0, {"cargo_1": (1.2600, 103.7500),
-                                   "escorte": (1.2598, 103.7497)}))
-    runtime.tick(fake.snapshot(10, {"cargo_1": (1.2620, 103.7500),
-                                    "escorte": (1.2615, 103.7500)}))
+    runtime.tick(fake.snapshot(0, {"cargo_1": (26.5500, 56.4000),
+                                   "escorte": (26.5498, 56.3997)}))
+    runtime.tick(fake.snapshot(10, {"cargo_1": (26.5520, 56.4000),
+                                    "escorte": (26.5515, 56.4000)}))
     assert "rouge" in fake.spawned_forces
-    runtime.tick(fake.snapshot(20, {"cargo_1": (1.2640, 103.7500),
-                                    "escorte": (1.2630, 103.7520),
-                                    "vedette_1": (1.2631, 103.7520),
-                                    "vedette_2": (1.2632, 103.7530)}))
-    runtime.tick(fake.snapshot(23, {"cargo_1": (1.2669, 103.7500),
-                                    "escorte": (1.2630, 103.7520),
-                                    "vedette_2": (1.2632, 103.7530)}))
+    runtime.tick(fake.snapshot(20, {"cargo_1": (26.5540, 56.4000),
+                                    "escorte": (26.5530, 56.4020),
+                                    "vedette_1": (26.5531, 56.4020),
+                                    "vedette_2": (26.5532, 56.4030)}))
+    runtime.tick(fake.snapshot(23, {"cargo_1": (26.5569, 56.4000),
+                                    "escorte": (26.5530, 56.4020),
+                                    "vedette_2": (26.5532, 56.4030)}))
     assert "vedette_1" in fake.deleted
-    runtime.tick(fake.snapshot(30, {"cargo_1": (1.2670, 103.7500),
-                                    "escorte": (1.2630, 103.7520),
-                                    "vedette_2": (1.2630, 103.7560)}))
+    runtime.tick(fake.snapshot(30, {"cargo_1": (26.5570, 56.4000),
+                                    "escorte": (26.5530, 56.4020),
+                                    "vedette_2": (26.5530, 56.4060)}))
     assert runtime.verdict is Verdict.SUCCEEDED
 
 
@@ -41,15 +41,15 @@ def test_ormuz_fails_when_cargo_is_destroyed():
     runtime, fake = in_memory_runtime("escorte_ormuz", "kinematic-ormuz")
     runtime.start()
     fake.destroy("cargo_1")
-    runtime.tick(fake.snapshot(4, {"escorte": (1.2598, 103.7497)}))
+    runtime.tick(fake.snapshot(4, {"escorte": (26.5498, 56.3997)}))
     assert runtime.verdict is Verdict.FAILED
 
 
 def test_ormuz_times_out_without_progress():
     runtime, fake = in_memory_runtime("escorte_ormuz", "kinematic-ormuz")
     runtime.start()
-    runtime.tick(fake.snapshot(180, {"cargo_1": (1.2600, 103.7500),
-                                     "escorte": (1.2598, 103.7497)}))
+    runtime.tick(fake.snapshot(180, {"cargo_1": (26.5500, 56.4000),
+                                     "escorte": (26.5498, 56.3997)}))
     assert runtime.verdict is Verdict.TIMED_OUT
 
 

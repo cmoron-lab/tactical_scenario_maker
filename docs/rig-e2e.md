@@ -36,7 +36,9 @@ docker run -d --name tsm-e2e -p 8080:8080 -p 5050:5000 \
 
 # 1. La simulation — le launcher upstream fait tout (env gz + monde + plugins).
 #    FASTDDS_BUILTIN_TRANSPORTS=UDPv4 est déjà un ENV de l'image.
-docker exec -d tsm-e2e bash -lc '/lotusim_ws/src/LOTUSim/launch/lotusim run > /tmp/gz.log 2>&1'
+# hormuz.world pour le scénario de référence (vrai détroit) ; sans argument :
+# lotusim.world (Singapour, scénarios v1). Changer de monde = relancer gz.
+docker exec -d tsm-e2e bash -lc '/lotusim_ws/src/LOTUSim/launch/lotusim run hormuz.world > /tmp/gz.log 2>&1'
 # vérif : docker exec tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic list'
 #         → /lotusim/poses et consorts
 

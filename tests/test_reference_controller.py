@@ -92,11 +92,11 @@ def test_attack_target_without_provider_fails_unsupported_without_crashing():
 def test_terminal_update_from_provider_is_routed_back_and_clears_active():
     controller = _ormuz_controller()
     controller.start_initial_forces()
-    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
     cargo = controller.supervisor("verte", "cargo_1")
     assert cargo.active_objective_id is not None  # goto soumis
-    # cargo_1 atteint sortie_ouest (1.267, 103.75) : le provider rapporte SUCCEEDED
-    controller.tick(snapshot(1, {"cargo_1": (1.267, 103.75), "escorte": (1.26, 103.75)}))
+    # cargo_1 atteint sortie_ouest (26.557, 56.40) : le provider rapporte SUCCEEDED
+    controller.tick(snapshot(1, {"cargo_1": (26.557, 56.40), "escorte": (1.26, 56.40)}))
     assert cargo.active_objective_id is None
     assert cargo.last_terminal_update.status is ObjectiveStatus.SUCCEEDED
 
@@ -110,12 +110,12 @@ def test_objective_events_log_transitions_only_never_in_progress_noise():
         white_cell=NoopWhiteCell(), transport=FakeTransport(),
         publish_event=events.append)
     controller.start_initial_forces()
-    # goto de cargo_1 vers sortie_ouest (1.267, 103.75) : plusieurs ticks en
+    # goto de cargo_1 vers sortie_ouest (26.557, 56.40) : plusieurs ticks en
     # route (in_progress côté provider), puis arrivée.
-    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
-    controller.tick(snapshot(1, {"cargo_1": (1.2620, 103.7500), "escorte": (1.26, 103.75)}))
-    controller.tick(snapshot(2, {"cargo_1": (1.2640, 103.7500), "escorte": (1.26, 103.75)}))
-    controller.tick(snapshot(3, {"cargo_1": (1.2670, 103.7500), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
+    controller.tick(snapshot(1, {"cargo_1": (26.5520, 56.4000), "escorte": (1.26, 56.40)}))
+    controller.tick(snapshot(2, {"cargo_1": (26.5540, 56.4000), "escorte": (1.26, 56.40)}))
+    controller.tick(snapshot(3, {"cargo_1": (26.5570, 56.4000), "escorte": (1.26, 56.40)}))
     goal_id = controller.supervisor("verte", "cargo_1").last_terminal_update.objective_id
     trail = [(e["type"], e.get("status")) for e in events
              if e.get("objective_id") == goal_id]
@@ -190,14 +190,14 @@ def test_stop_cancels_active_objectives_and_neutralizes_ticks():
     transport = FakeTransport()
     controller = _ormuz_controller(transport)
     controller.start_initial_forces()
-    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
     cargo = controller.supervisor("verte", "cargo_1")
     assert cargo.active_objective_id is not None
     controller.stop("operator")
     assert cargo.active_objective_id is None
     assert "cargo_1" in transport.stopped
     before = len(transport.waypoints)
-    controller.tick(snapshot(1, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(1, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
     assert len(transport.waypoints) == before  # tick neutralisé après stop
 
 
@@ -230,17 +230,17 @@ def test_terminal_verdict_publishes_verdict_event_and_neutralizes_ticks():
         white_cell=cell, transport=transport, publish_event=events.append)
     holder["c"] = controller
     controller.start_initial_forces()
-    running = snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)})
+    running = snapshot(0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)})
     controller.tick(running)
     assert transport.waypoints  # le run tourne : des waypoints ont été émis
     assert not any(e.get("type") == "verdict" for e in events)
-    controller.tick(snapshot(5.0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(5.0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
     count = len(transport.waypoints)
     verdict_event = next(e for e in events if e.get("type") == "verdict")
     assert verdict_event["verdict"] == "timed_out"
     assert "reason" in verdict_event  # raison threadée pour record_verdict (Task 7)
     assert any(e.get("type") == "run_stop" for e in events)
-    controller.tick(snapshot(6.0, {"cargo_1": (1.2599, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(6.0, {"cargo_1": (26.5499, 56.3997), "escorte": (1.26, 56.40)}))
     assert len(transport.waypoints) == count  # tick neutralisé après le verdict
 
 
@@ -252,11 +252,11 @@ def test_terminal_verdict_publishes_verdict_event_and_neutralizes_ticks():
 def test_casualty_triggers_episodic_replan_of_active_objectives():
     controller = _ormuz_controller()
     controller.start_initial_forces()
-    controller.tick(snapshot(0, {"cargo_1": (1.2598, 103.7497), "escorte": (1.26, 103.75)}))
+    controller.tick(snapshot(0, {"cargo_1": (26.5498, 56.3997), "escorte": (1.26, 56.40)}))
     cargo = controller.supervisor("verte", "cargo_1")
     first = cargo.active_objective_id
     assert first is not None
-    controller.tick(snapshot(1, {"cargo_1": (1.2600, 103.7497), "escorte": (1.26, 103.75)},
+    controller.tick(snapshot(1, {"cargo_1": (26.5500, 56.3997), "escorte": (1.26, 56.40)},
                              destroyed={"vedette_1"}))
     # Annulation en tete de tick puis replanification au MEME tick : le
     # superviseur repart immediatement sur un objectif frais.
@@ -274,8 +274,8 @@ def test_preflight_purges_every_observed_vessel_declared_or_stray(monkeypatch):
     transport = FakeTransport()
     controller = _ormuz_controller(transport)
     controller._world_store.update_poses(1.0, {
-        'vedette_1': Position(1.263, 103.752),
-        'drone1': Position(1.280, 103.770)})
+        'vedette_1': Position(26.553, 56.402),
+        'drone1': Position(26.570, 56.420)})
     with pytest.raises(RunStartError):
         controller.start_initial_forces()  # la fake ne retire pas les poses
     assert 'vedette_1' in transport.deleted
@@ -290,12 +290,12 @@ def test_destroyed_agent_reads_as_unavailable_so_retreat_branch_fires():
     controller = _ormuz_controller(transport)
     controller.start_initial_forces()
     controller.spawn_force("rouge")
-    controller.tick(snapshot(1, {"cargo_1": (1.2620, 103.75), "escorte": (1.2618, 103.75),
-                                 "vedette_1": (1.2630, 103.7520),
-                                 "vedette_2": (1.2632, 103.7530)}))
+    controller.tick(snapshot(1, {"cargo_1": (26.5520, 56.40), "escorte": (26.5518, 56.40),
+                                 "vedette_1": (26.5530, 56.4020),
+                                 "vedette_2": (26.5532, 56.4030)}))
     assert controller.supervisor("rouge", "vedette_2").active_objective_id is not None
-    controller.tick(snapshot(2, {"cargo_1": (1.2620, 103.75), "escorte": (1.2618, 103.75),
-                                 "vedette_2": (1.2632, 103.7530)},
+    controller.tick(snapshot(2, {"cargo_1": (26.5520, 56.40), "escorte": (26.5518, 56.40),
+                                 "vedette_2": (26.5532, 56.4030)},
                              destroyed={"vedette_1"}))
     # perte adjugée → replanification même tick → goto repli_nord
-    assert ("vedette_2", 1.2630, 103.7560) in transport.waypoints
+    assert ("vedette_2", 26.5530, 56.4060) in transport.waypoints

@@ -426,17 +426,11 @@ def interposer_m(state, agent, threat, protege):
 # (précondition agent_present, args non-token passés tels quels par _resolve),
 # elle vit donc dans doctrine/knowledge_base.json::tasks via register_kb.
 
-# ponytail: positions figées, dupliquées depuis scenarios/escorte_ormuz.json —
-# le state GTPyhop v3 ne porte pas encore les zones du scénario. À réviser si
-# le superviseur (Task 5) finit par exposer scenario.zones dans le state.
-_ORMUZ_ZONES = {
-    'sortie_ouest': (1.2670, 103.7500, 0.00015),
-    'repli_nord': (1.2630, 103.7560, 0.00015),
-}
-
-
 def goto_m(state: Any, agent: str, zone_name: str) -> list[tuple[Any, ...]] | bool:
-    zone = _ORMUZ_ZONES.get(zone_name)
+    # Les zones viennent du Scenario Request via le superviseur
+    # (state.zones = {nom: (lat, lon, radius_deg)}) — source unique de
+    # vérité, plus de doublon en dur ici.
+    zone = (getattr(state, 'zones', None) or {}).get(zone_name)
     if zone is None:
         return False
     lat, lon, radius = zone

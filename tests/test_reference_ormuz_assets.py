@@ -27,15 +27,23 @@ def test_ormuz_profile_declares_only_selected_backends():
 # attendus par le superviseur (Task 5) — pas de couverture GTPyhop end-to-end
 # ici (le state v3 n'existe pas encore), juste les fonctions elles-mêmes.
 
+def _zones():
+    # Zones du Scenario Request réel — source unique, injectées dans l'état
+    # comme le fait le superviseur (state.zones).
+    scenario = load_reference_scenario('escorte_ormuz')
+    return {n: (z.lat, z.lon, z.radius_deg) for n, z in scenario.zones.items()}
+
+
 def _state(agents):
     st = type('State', (), {})()
     st.agents = agents
+    st.zones = _zones()
     return st
 
 
 def test_goto_m_resolves_named_zone_to_position_and_radius():
     plan = methods.goto_m(_state({}), 'cargo_1', 'sortie_ouest')
-    assert plan == [('goto', 'cargo_1', (1.2670, 103.7500), 0.00015)]
+    assert plan == [('goto', 'cargo_1', (26.5570, 56.4000), 0.00015)]
 
 
 def test_goto_m_unknown_zone_is_inapplicable():
@@ -65,7 +73,7 @@ def test_escorter_convoi_m_chains_follow_then_attack():
 def test_repli_apres_perte_m_retreats_once_vedette_1_destroyed():
     state = _state({'vedette_1': {'available': False}, 'cargo_1': {'available': True}})
     plan = methods.repli_apres_perte_m(state, 'vedette_2')
-    assert plan == [('goto', 'vedette_2', (1.2630, 103.7560), 0.00015)]
+    assert plan == [('goto', 'vedette_2', (26.5530, 56.4060), 0.00015)]
 
 
 def test_repli_apres_perte_m_delegates_to_poursuivre_cargo_while_vedette_1_lives():
@@ -86,6 +94,7 @@ def test_repli_apres_perte_m_delegates_to_poursuivre_cargo_while_vedette_1_lives
 def test_find_plan_produces_primitive_tuples_through_real_registration():
     planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
     state = gtpyhop.State('ormuz')
+    state.zones = _zones()
     state.agents = {
         'cargo_1': {'available': True},
         'escorte': {'available': True},
@@ -116,6 +125,7 @@ def test_find_plan_produces_primitive_tuples_through_real_registration():
 
 def _planner_state(positions):
     state = gtpyhop.State('ormuz_pos')
+    state.zones = _zones()
     state.agents = {name: {'available': True, 'pos': {'lat': lat, 'lon': lon}}
                     for name, (lat, lon) in positions.items()}
     return state
@@ -124,14 +134,14 @@ def _planner_state(positions):
 def test_escorter_convoi_at_station_decomposes_to_attack_only():
     planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
     # 0.0001 <= stop_distance 0.00045 : le suivi est déjà satisfait
-    state = _planner_state({'escorte': (1.2631, 103.7520), 'vedette_1': (1.2630, 103.7520)})
+    state = _planner_state({'escorte': (26.5531, 56.4020), 'vedette_1': (26.5530, 56.4020)})
     assert planner.find_plan(state, ('escorter_convoi', 'escorte')) == \
         [('attack_target', 'escorte', 'vedette_1')]
 
 
 def test_escorter_convoi_far_from_threat_still_follows_first():
     planner = Planner(doctrine.load(), actions=(goto, follow_target, attack_target))
-    state = _planner_state({'escorte': (1.2600, 103.7500), 'vedette_1': (1.2630, 103.7520)})
+    state = _planner_state({'escorte': (26.5500, 56.4000), 'vedette_1': (26.5530, 56.4020)})
     plan = planner.find_plan(state, ('escorter_convoi', 'escorte'))
     assert plan[0] == ('follow_target', 'escorte', 'vedette_1', 0.00045)
 
@@ -140,8 +150,8 @@ def test_follow_target_m_without_stop_distance_never_self_satisfies():
     # Poursuite pure (poursuivre_cargo) : même à distance nulle, le suivi
     # reste émis — seul un suivi borné (stop_distance) peut être « tenu ».
     state = _state({
-        'vedette_2': {'available': True, 'pos': {'lat': 1.2630, 'lon': 103.7520}},
-        'cargo_1': {'available': True, 'pos': {'lat': 1.2630, 'lon': 103.7520}},
+        'vedette_2': {'available': True, 'pos': {'lat': 26.5530, 'lon': 56.4020}},
+        'cargo_1': {'available': True, 'pos': {'lat': 26.5530, 'lon': 56.4020}},
     })
     plan = methods.follow_target_m(state, 'vedette_2', 'cargo_1')
     assert plan == [('follow_target', 'vedette_2', 'cargo_1', None)]
@@ -157,18 +167,18 @@ def test_escorter_convoi_holds_station_on_convoy_when_no_threat_in_sight():
     # (v/om = 120 m) ne devient jamais terminale (rig r-000005) — c'est la
     # replanification sur changement de situation qui fait basculer.
     state = _state({'cargo_1': {'available': True,
-                                'pos': {'lat': 1.2620, 'lon': 103.75}},
+                                'pos': {'lat': 26.5520, 'lon': 56.40}},
                     'escorte': {'available': True,
-                                'pos': {'lat': 1.2600, 'lon': 103.75}}})
+                                'pos': {'lat': 26.5500, 'lon': 56.40}}})
     plan = methods.escorter_convoi_m(state, 'escorte')
     assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
 
 def test_escorter_convoi_station_never_self_satisfies_even_at_contact():
     state = _state({'cargo_1': {'available': True,
-                                'pos': {'lat': 1.2600, 'lon': 103.75}},
+                                'pos': {'lat': 26.5500, 'lon': 56.40}},
                     'escorte': {'available': True,
-                                'pos': {'lat': 1.2600, 'lon': 103.75}}})
+                                'pos': {'lat': 26.5500, 'lon': 56.40}}})
     plan = methods.escorter_convoi_m(state, 'escorte')
     assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
@@ -176,9 +186,9 @@ def test_escorter_convoi_station_never_self_satisfies_even_at_contact():
 def test_escorter_convoi_returns_to_station_after_threat_destroyed():
     state = _state({'vedette_1': {'available': False},
                     'cargo_1': {'available': True,
-                                'pos': {'lat': 1.2650, 'lon': 103.75}},
+                                'pos': {'lat': 26.5550, 'lon': 56.40}},
                     'escorte': {'available': True,
-                                'pos': {'lat': 1.2630, 'lon': 103.7520}}})
+                                'pos': {'lat': 26.5530, 'lon': 56.4020}}})
     plan = methods.escorter_convoi_m(state, 'escorte')
     assert plan == [('follow_target', 'escorte', 'cargo_1', None)]
 
@@ -191,9 +201,9 @@ def test_goto_self_satisfies_once_inside_the_zone():
     # Arrivé au point de repli, un goto réémis à chaque tick spammerait la
     # timeline à 5 Hz (rig r-000008) : zone atteinte ⇒ décomposition vide.
     state = _state({'vedette_2': {'available': True,
-                                  'pos': {'lat': 1.2630, 'lon': 103.7560}}})
+                                  'pos': {'lat': 26.5530, 'lon': 56.4060}}})
     assert methods.goto_m(state, 'vedette_2', 'repli_nord') == []
     state = _state({'vedette_2': {'available': True,
-                                  'pos': {'lat': 1.2632, 'lon': 103.7530}}})
+                                  'pos': {'lat': 26.5532, 'lon': 56.4030}}})
     assert methods.goto_m(state, 'vedette_2', 'repli_nord') == [
-        ('goto', 'vedette_2', (1.2630, 103.7560), 0.00015)]
+        ('goto', 'vedette_2', (26.5530, 56.4060), 0.00015)]

@@ -133,11 +133,14 @@ def _noop_publish(event: Event) -> None:
     return None
 
 
-def _state_from_view(view: ForceView) -> Any:
+def _state_from_view(view: ForceView,
+                     zones: Mapping[str, tuple[float, float, float]] | None = None) -> Any:
     """État GTPyhop NEUF depuis la vue — la forme exacte que lisent les méthodes
-    v3 (state.agents[name] = {'pos': {...}, 'available': ...}). Reconstruit à
+    v3 (state.agents[name] = {'pos': {...}, 'available': ...} ; state.zones =
+    {nom: (lat, lon, radius_deg)}, tirées du Scenario Request). Reconstruit à
     chaque tick, jamais partagé ni muté entre superviseurs."""
     state: Any = gtpyhop.State('view')
+    state.zones = dict(zones or {})
     state.agents = {}
     for name, pos in view.world.positions.items():
         state.agents[name] = {
@@ -160,13 +163,15 @@ class MissionSupervisor:
                  providers: Mapping[str, _Provider], objectives: ObjectiveFactory,
                  mission_task: tuple[Any, ...] = (), timeout_s: float = 0.0,
                  update_threshold_deg: float = _DEFAULT_UPDATE_THRESHOLD_DEG,
-                 publish_event: PublishEvent = _noop_publish) -> None:
+                 publish_event: PublishEvent = _noop_publish,
+                 zones: Mapping[str, tuple[float, float, float]] | None = None) -> None:
         self._agent = agent
         self._force = force
         self._planner = planner
         self._providers = providers
         self._objectives = objectives
         self._mission_task = mission_task
+        self._zones = dict(zones or {})
         self._timeout_s = timeout_s
         self._update_threshold_deg = update_threshold_deg
         self._publish = publish_event
@@ -180,7 +185,8 @@ class MissionSupervisor:
         if self.active_objective_id is not None:
             return
         world = view.world
-        plan = self._planner.find_plan(_state_from_view(view), self._mission_task)
+        plan = self._planner.find_plan(_state_from_view(view, self._zones),
+                                       self._mission_task)
         if not plan:  # False / None / [] : idle ce tick, retentera au suivant
             return
         capability, parameters = self._translate(plan[0])
@@ -418,7 +424,9 @@ class RunController:
             mission_task=self._graph.by_force[force][agent].to_htn_task(),
             timeout_s=self._scenario.end.timeout_s,
             update_threshold_deg=self._update_threshold_for(agent),
-            publish_event=self._publish)
+            publish_event=self._publish,
+            zones={name: (z.lat, z.lon, z.radius_deg)
+                   for name, z in self._scenario.zones.items()})
 
     def _providers_for(self, agent: str) -> dict[str, _Provider]:
         """Capacités déclarées ∩ implémentations disponibles. Une capacité sans

@@ -11,32 +11,32 @@
     {"from": "bleue", "to": ["verte"], "attitude": "protect"}
   ],
   "zones": {
-    "passe_ormuz": {"center": {"lat": 1.2620, "lon": 103.7500}, "radius_deg": 0.0008},
-    "sortie_ouest": {"center": {"lat": 1.2670, "lon": 103.7500}, "radius_deg": 0.00015},
-    "repli_nord": {"center": {"lat": 1.2630, "lon": 103.7560}, "radius_deg": 0.00015}
+    "passe_ormuz": {"center": {"lat": 26.5520, "lon": 56.4000}, "radius_deg": 0.0008},
+    "sortie_ouest": {"center": {"lat": 26.5570, "lon": 56.4000}, "radius_deg": 0.00015},
+    "repli_nord": {"center": {"lat": 26.5530, "lon": 56.4060}, "radius_deg": 0.00015}
   },
   "agents": {
     "cargo_1": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2598, "lon": 103.7500},
+      "position": {"lat": 26.5498, "lon": 56.4000},
       "mission": {"task": "transiter_vers_zone", "args": ["cargo_1", "sortie_ouest"]},
       "conditions": {}
     },
     "escorte": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2596, "lon": 103.7500},
+      "position": {"lat": 26.5496, "lon": 56.4000},
       "mission": {"task": "escorter_convoi", "args": ["escorte"]},
       "conditions": {}
     },
     "vedette_1": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2630, "lon": 103.7520},
+      "position": {"lat": 26.5530, "lon": 56.4020},
       "mission": {"task": "poursuivre_cargo", "args": ["vedette_1"]},
       "conditions": {}
     },
     "vedette_2": {
       "platform": "surface_vessel",
-      "position": {"lat": 1.2632, "lon": 103.7530},
+      "position": {"lat": 26.5532, "lon": 56.4030},
       "mission": {"task": "repli_apres_perte", "args": ["vedette_2"]},
       "conditions": {}
     }
