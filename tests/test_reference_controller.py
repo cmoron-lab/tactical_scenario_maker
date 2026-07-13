@@ -264,19 +264,22 @@ def test_casualty_triggers_episodic_replan_of_active_objectives():
     assert cargo.active_objective_id != first
 
 
-def test_preflight_purges_all_declared_agents_including_deferred(monkeypatch):
-    # Une vedette (force différée) d'un run précédent est encore observée :
-    # le préflight doit la purger — ids stables entre runs, sinon son respawn
-    # au trigger serait invisible au détecteur d'apparition (rig r-000006).
+def test_preflight_purges_every_observed_vessel_declared_or_stray(monkeypatch):
+    # Le préflight purge TOUT navire observé : une vedette d'un run précédent
+    # (ids stables — son respawn serait invisible, rig r-000006) comme un
+    # artefact d'un autre scénario (drone1 : pollution de scène constatée).
     import tsm.execution.controller as controller_mod
     from tsm.domain.scenario import Position
     monkeypatch.setattr(controller_mod, '_PURGE_TIMEOUT_S', 0.05)
     transport = FakeTransport()
     controller = _ormuz_controller(transport)
-    controller._world_store.update_poses(1.0, {'vedette_1': Position(1.263, 103.752)})
+    controller._world_store.update_poses(1.0, {
+        'vedette_1': Position(1.263, 103.752),
+        'drone1': Position(1.280, 103.770)})
     with pytest.raises(RunStartError):
-        controller.start_initial_forces()  # la fake ne retire pas la pose
+        controller.start_initial_forces()  # la fake ne retire pas les poses
     assert 'vedette_1' in transport.deleted
+    assert 'drone1' in transport.deleted
 
 
 def test_destroyed_agent_reads_as_unavailable_so_retreat_branch_fires():

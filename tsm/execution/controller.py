@@ -319,11 +319,13 @@ class RunController:
         self._preflight_validate()
         initial = sorted(force for force, spec in self._scenario.forces.items()
                          if spec.spawn == 'initial')
-        # Purge TOUS les noms déclarés (forces différées comprises) : les ids
-        # sont stables entre runs, et une vedette d'un run précédent encore en
-        # scène rendrait le respawn différé invisible au détecteur d'apparition
-        # (constaté au rig, run r-000006).
-        self._purge(sorted(self._scenario.agents))
+        # Purge TOUT navire observé, déclaré ou non : un run possède le monde
+        # simulé pour sa durée (provenance : état initial connu). Les ids sont
+        # stables entre runs — une vedette d'un run précédent encore en scène
+        # rendrait le respawn différé invisible (rig r-000006) — et les
+        # artefacts d'autres scénarios (drone1, veilleur_0…) polluent la scène.
+        observed = sorted(self._world_store.snapshot().positions)
+        self._purge(observed)
         for force in initial:
             for agent in sorted(self._graph.by_force[force]):
                 self._spawn(force, agent)

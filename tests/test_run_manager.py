@@ -315,3 +315,15 @@ def test_cli_v1_scenario_with_profile_exits_with_clear_french_error():
     result = _run_cli('demo_veille_drone_intru', '--profile', 'kinematic-ormuz')
     assert result.returncode != 0
     assert 'profile' in result.stderr
+
+
+def test_v3_window_before_run_directory_never_serves_stale_flat_files(tmp_path):
+    # Entre le launch v3 et la création de logs/<run_id>/ par l'enfant, le
+    # serveur retombait sur les fichiers plats legacy : le journal des vieilles
+    # démos v1 remplissait le panneau Événements et empoisonnait le curseur.
+    (tmp_path / 'events.jsonl').write_text('{"kind": "vieux_junk_v1"}\n')
+    (tmp_path / 'poses.csv').write_text('1.0,drone1,1.28,103.77\n')
+    manager = RunManager(logs_dir=tmp_path)
+    manager._profile = 'kinematic-ormuz'  # launch v3 en cours, run_id inconnu
+    assert manager.events_since(0) == {'events': [], 'next': 0}
+    assert manager.poses()['agents'] == {}

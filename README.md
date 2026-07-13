@@ -39,8 +39,19 @@ Puis `http://localhost:8080` → scénario « escorte_ormuz », profil
 « kinematic-ormuz », Lancer. ⚠️ Le code Python du serveur est figé au
 démarrage : après un changement de checkout, relancer `app.py`.
 
-Optionnel (carte LOTUSim :5173), séquence détaillée, vérifications,
-teardown et pièges : `docs/rig-e2e.md`.
+    # 3. Optionnel — carte LOTUSim (:5173). Backend dans le conteneur
+    #    (node à réinstaller à chaque recréation ; lancer depuis /lab,
+    #    clone patché multi-clients, pas la copie de l'image) :
+    docker exec tsm-e2e bash -c 'apt-get update -qq && apt-get install -y -qq nodejs npm'
+    docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
+      source /lotusim_ws/install/setup.bash && cd /lab/LOTUSim-UI-backend && \
+      npx ts-node src/main.ts > /tmp/backend.log 2>&1'
+    # vérif : curl -s localhost:5050/instances → ["lotusim"]
+
+    # 4. Frontend, sur le Mac (REST/WS :5050 uniquement, pas de ROS) :
+    cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev   # → :5173
+
+Séquence détaillée, vérifications, teardown et pièges : `docs/rig-e2e.md`.
 
 ## Développement
 

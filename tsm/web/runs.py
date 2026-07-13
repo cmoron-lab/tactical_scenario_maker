@@ -268,16 +268,23 @@ class RunManager:
 
     # -- lecture des logs ---------------------------------------------------
 
-    def _current_dir(self) -> Path:
+    def _current_dir(self) -> Path | None:
         # v1 (legacy, self._profile is None) : fichiers plats sous logs_dir,
         # comme toujours. v3 (profile connu) : sous logs_dir/<run_id>/ une fois
-        # que le sous-processus l'a créé — voir le ponytail de _discover_run_id
-        # pour la fenêtre transitoire où run_id n'est pas encore connu.
+        # que le sous-processus l'a créé. Dans la fenêtre transitoire où
+        # run_id n'est pas encore connu, on ne sert RIEN (None) : retomber sur
+        # les fichiers plats servirait le journal des vieux runs v1 et
+        # empoisonnerait le curseur du client.
         run_id = self._discover_run_id()
-        return self._logs_dir / run_id if run_id is not None else self._logs_dir
+        if run_id is not None:
+            return self._logs_dir / run_id
+        return None if self._profile is not None else self._logs_dir
 
     def events_since(self, since: int) -> dict[str, Any]:
-        path = self._current_dir() / 'events.jsonl'
+        current = self._current_dir()
+        if current is None:
+            return {'events': [], 'next': since}
+        path = current / 'events.jsonl'
         if not path.exists():
             return {'events': [], 'next': 0}
         events = []
@@ -289,8 +296,11 @@ class RunManager:
         return {'events': events[since:], 'next': len(events)}
 
     def poses(self) -> dict[str, Any]:
-        pose_path = self._current_dir() / 'poses.csv'
-        wp_path = self._current_dir() / 'waypoints.csv'
+        current = self._current_dir()
+        if current is None:  # fenêtre v3 pré-répertoire : ne rien servir de périmé
+            return {'agents': {}}
+        pose_path = current / 'poses.csv'
+        wp_path = current / 'waypoints.csv'
         # le runtime tronque LES DEUX fichiers au lancement d'un nouveau run :
         # détecter la troncature sur l'un OU l'autre et purger UNE seule fois —
         # une purge par fichier effacerait ce que le premier vient de lire
