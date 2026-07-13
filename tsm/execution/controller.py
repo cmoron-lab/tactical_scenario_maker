@@ -503,6 +503,13 @@ class RunController:
         for force in sorted(self._active_forces):
             view = self.view_for(force, world)
             for agent in self._graph.by_force[force]:
+                # Destruction adjugée = fin de la supervision de cet agent :
+                # son objectif vient d'être annulé par le replan de situation
+                # ci-dessus, et un superviseur qui continuerait de planifier
+                # resoumettrait un objectif voué à FAILED à chaque tick (436
+                # soumissions post-mortem de vedette_2 au rig r-000020).
+                if agent in world.destroyed:
+                    continue
                 self._supervisors[(force, agent)].tick(view)
         for provider in self._provider_instances:
             for update in provider.tick(world):

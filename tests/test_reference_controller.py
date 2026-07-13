@@ -299,3 +299,24 @@ def test_destroyed_agent_reads_as_unavailable_so_retreat_branch_fires():
                              destroyed={"vedette_1"}))
     # perte adjugée → replanification même tick → goto repli_nord
     assert ("vedette_2", 26.5530, 56.4060) in transport.waypoints
+
+
+def test_destroyed_agent_supervisor_never_submits_again():
+    # Un agent détruit n'a plus de supervision (N2) : sans ce guard, son
+    # superviseur — objectif annulé par le replan de situation — replanifie
+    # et resoumet à CHAQUE tick (436 soumissions post-mortem de vedette_2 au
+    # rig r-000020, depuis que la doctrine générique en fait une cible
+    # légitime de l'escorte).
+    controller = _ormuz_controller()
+    controller.start_initial_forces()
+    controller.spawn_force("rouge")
+    alive = {"cargo_1": (26.5520, 56.40), "escorte": (26.5518, 56.40),
+             "vedette_1": (26.5530, 56.4020), "vedette_2": (26.5532, 56.4030)}
+    controller.tick(snapshot(1, alive))
+    supervisor = controller.supervisor("rouge", "vedette_2")
+    assert supervisor.active_objective_id is not None
+    without_v2 = {k: v for k, v in alive.items() if k != "vedette_2"}
+    controller.tick(snapshot(2, without_v2, destroyed={"vedette_2"}))
+    assert supervisor.active_objective_id is None  # annulé, pas resoumis
+    controller.tick(snapshot(3, without_v2, destroyed={"vedette_2"}))
+    assert supervisor.active_objective_id is None
