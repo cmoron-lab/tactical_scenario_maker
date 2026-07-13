@@ -56,8 +56,10 @@ def goto(state: Any, agent: str, position: Any, arrival_radius_deg: float) -> An
     return state
 
 
-def follow_target(state: Any, agent: str, target: str, stop_distance_deg: float | None) -> Any:
-    """Action pure v3 : aucune mutation, le superviseur traduit le suivi."""
+def follow_target(state: Any, agent: str, target: str, stop_distance_deg: float | None,
+                  envelope: tuple[str, float] | None = None) -> Any:
+    """Action pure v3 : aucune mutation, le superviseur traduit le suivi.
+    `envelope` optionnelle (ancre, rayon) : condition d'abandon du contrat."""
     return state
 
 

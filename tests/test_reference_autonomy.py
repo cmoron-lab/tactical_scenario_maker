@@ -50,6 +50,39 @@ def test_follow_target_without_stop_distance_never_succeeds():
     assert update.status == ObjectiveStatus.IN_PROGRESS
 
 
+def test_follow_target_abandons_once_the_follower_leaves_its_anchor_envelope():
+    # Enveloppe d'engagement : condition d'abandon portée par l'objectif —
+    # le suiveur rompt dès que LUI s'éloigne de l'ancre (le protégé) au-delà
+    # du rayon, même s'il gagne sur sa cible. Prime sur le succès : ici le
+    # suiveur est AUSSI au contact (stop_distance atteint), il rompt quand même.
+    provider, _ = kinematic_provider()
+    provider.submit(objective("g-000001", "escorte", "navigation.follow_target",
+                              {"target_agent": "fuyard", "update_threshold_deg": 0.0003,
+                               "stop_distance_deg": 0.0005,
+                               "abandon_anchor_agent": "cargo",
+                               "abandon_beyond_deg": 0.0015}),
+                    snapshot(0, {"escorte": (1.0, 2.0), "fuyard": (1.001, 2.0),
+                                 "cargo": (1.0005, 2.0)}))
+    inside = provider.tick(snapshot(1, {"escorte": (1.0, 2.0), "fuyard": (1.01, 2.0),
+                                        "cargo": (1.001, 2.0)}))[-1]
+    assert inside.status == ObjectiveStatus.IN_PROGRESS
+    outside = provider.tick(snapshot(2, {"escorte": (1.005, 2.0), "fuyard": (1.0054, 2.0),
+                                         "cargo": (1.001, 2.0)}))[-1]
+    assert outside.status == ObjectiveStatus.FAILED
+    assert outside.reason == "hors_enveloppe"
+
+
+def test_follow_target_ignores_the_envelope_when_the_anchor_is_unobserved():
+    provider, _ = kinematic_provider()
+    provider.submit(objective("g-000001", "escorte", "navigation.follow_target",
+                              {"target_agent": "fuyard", "update_threshold_deg": 0.0003,
+                               "abandon_anchor_agent": "cargo",
+                               "abandon_beyond_deg": 0.0015}),
+                    snapshot(0, {"escorte": (1.0, 2.0), "fuyard": (1.01, 2.0)}))
+    update = provider.tick(snapshot(1, {"escorte": (1.005, 2.0), "fuyard": (1.01, 2.0)}))[-1]
+    assert update.status == ObjectiveStatus.IN_PROGRESS
+
+
 def test_goto_fails_when_the_target_agent_is_destroyed():
     provider, _ = kinematic_provider()
     goal = objective("g-000001", "cargo", "navigation.goto",

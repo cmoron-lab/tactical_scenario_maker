@@ -140,6 +140,20 @@ class KinematicWaypointFollower:
         if distance_deg(target_pos, active.last_target) >= threshold_deg:
             self._transport.set_waypoints(agent, target_pos.lat, target_pos.lon)
             active.last_target = target_pos
+        # Condition d'abandon portée par l'objectif (même famille que
+        # stop_distance_deg : une condition terminale du contrat, évaluée sur
+        # l'observation) : le suiveur rompt dès qu'IL s'éloigne de l'ancre
+        # au-delà du rayon — l'enveloppe d'engagement de l'escorte. Prime sur
+        # le succès : à la fois au contact et hors enveloppe = rompre. Ancre
+        # non observée : pas de contrainte évaluable, le suivi continue.
+        abandon_anchor = objective.parameters.get("abandon_anchor_agent")
+        if abandon_anchor is not None:
+            own_pos = world.positions.get(agent)
+            anchor_pos = world.positions.get(abandon_anchor)
+            if own_pos is not None and anchor_pos is not None and \
+                    distance_deg(own_pos, anchor_pos) > objective.parameters["abandon_beyond_deg"]:
+                return ObjectiveUpdate(objective.id, ObjectiveStatus.FAILED,
+                                       world.sim_time_s, reason="hors_enveloppe")
         stop_distance_deg = objective.parameters.get("stop_distance_deg")
         if stop_distance_deg is not None:
             own_pos = world.positions.get(agent)

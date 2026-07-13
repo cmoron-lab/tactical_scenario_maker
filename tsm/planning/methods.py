@@ -428,6 +428,17 @@ def interposer_m(state, agent, threat, protege):
 # portée adjudiquée du profil de référence (adjudicated.range_deg 0.00045).
 ENGAGE_STANDOFF_DEG = 0.00045
 
+# Enveloppe d'engagement de l'escorte : distance max escorte↔protégé pour
+# engager OU poursuivre — l'escorte ne s'éloigne pas de sa charge. Ancrée sur
+# l'ESCORTE (pas la menace) : poursuivre un attaquant la garde près du convoi
+# (kill de vedette_1 à 0.0012-0.0013 du cargo, rigs r-000020/21), poursuivre
+# un fuyard l'en éloigne (0.0019-0.0021 à l'attaque de vedette_2) — la
+# séparation est structurelle, une enveloppe menace↔protégé ne sépare pas
+# (spawns à 0.0019 et 0.0028 pour un bruit de porte de ±0.0008). Vérifiée au
+# plan ET en continu (l'objectif de poursuite porte l'ancre : FAILED
+# 'hors_enveloppe' dès que l'escorte s'éloigne trop, cf. autonomy).
+ENGAGE_ENVELOPE_DEG = 0.0015
+
 
 def _force_of(state: Any, agent: str) -> str | None:
     for force, members in (getattr(state, 'forces', None) or {}).items():
@@ -472,7 +483,9 @@ def goto_m(state: Any, agent: str, zone_name: str) -> list[tuple[Any, ...]] | bo
 
 
 def follow_target_m(state: Any, agent: str, target: str,
-                    stop_distance_deg: float | None = None) -> list[tuple[Any, ...]] | bool:
+                    stop_distance_deg: float | None = None,
+                    envelope: tuple[str, float] | None = None
+                    ) -> list[tuple[Any, ...]] | bool:
     if target not in state.agents or not state.agents[target].get("available", True):
         return False
     # Poste tenu : un suivi borné déjà satisfait se décompose en [] (tâche
@@ -486,7 +499,13 @@ def follow_target_m(state: Any, agent: str, target: str,
         target_pos = state.agents[target].get('pos')
         if self_pos and target_pos and distance_deg(self_pos, target_pos) <= stop_distance_deg:
             return []
-    return [("follow_target", agent, target, stop_distance_deg)]
+    step: tuple[Any, ...] = ("follow_target", agent, target, stop_distance_deg)
+    # 5e élément optionnel (ancre, rayon) : condition d'abandon portée par
+    # l'objectif — le provider conclut FAILED('hors_enveloppe') dès que
+    # l'AGENT s'éloigne de l'ancre au-delà du rayon.
+    if envelope is not None:
+        step = step + (envelope,)
+    return [step]
 
 
 def attack_target_m(state: Any, agent: str, target: str) -> list[tuple[Any, ...]] | bool:
@@ -505,28 +524,39 @@ def poursuivre_m(state: Any, agent: str, cible: str) -> list[tuple[Any, ...]] | 
 def escorter_convoi_m(state: Any, agent: str) -> list[tuple[Any, ...]] | bool:
     """Protégé = agent vivant des forces que MA force protège ; menace = agent
     vivant d'une force hostile au protégé — dérivés des relations, plus proche
-    d'abord (convention _nearest_agent, « la menace, c'est la plus proche »)."""
+    d'abord (convention _nearest_agent, « la menace, c'est la plus proche »).
+    L'engagement est borné par l'enveloppe : l'escorte n'engage que depuis le
+    voisinage de sa charge, et la poursuite s'interrompt dès qu'elle l'en
+    éloignerait trop — un fuyard s'échappe, l'escorte revient au poste."""
     my_force = _force_of(state, agent)
     relations = getattr(state, 'relations', None) or ()
     protege_forces = {t for src, targets, att in relations
                       if att == 'protect' and src == my_force for t in targets}
-    threats = _living_members(state, _hostile_to(state, protege_forces))
-    threat = _nearest_agent(state, agent, threats)
+    protege = _nearest_agent(state, agent, _living_members(state, protege_forces))
+    threat = _nearest_agent(state, agent,
+                            _living_members(state, _hostile_to(state, protege_forces)))
+    if threat is not None and protege is not None:
+        self_pos = state.agents.get(agent, {}).get('pos')
+        protege_pos = state.agents.get(protege, {}).get('pos')
+        if self_pos and protege_pos and \
+                distance_deg(self_pos, protege_pos) > ENGAGE_ENVELOPE_DEG:
+            threat = None  # hors de l'enveloppe : retour au poste, pas de chasse
     if threat is None:
-        # Pas de menace en vue (ou déjà détruite) : tenir le poste sur le
-        # protégé (§8.2 « station de l'escorte »). Sans cette branche,
-        # l'escorte reste au spawn pendant le transit et l'interception
-        # devient une chasse arrière perdue (vedette 8 m/s > escorte 6 m/s,
-        # run rig r-000004). Le suivi est NON borné : une station bornée plus
-        # serrée que le rayon de giration (v/ω = 120 m > 55 m) ne devient
-        # jamais terminale (run r-000005) — c'est la replanification sur
-        # changement de situation (controller) qui fait basculer vers
-        # l'engagement quand la menace apparaît.
-        protege = _nearest_agent(state, agent, _living_members(state, protege_forces))
+        # Pas de menace engageable : tenir le poste sur le protégé (§8.2
+        # « station de l'escorte »). Sans cette branche, l'escorte reste au
+        # spawn pendant le transit et l'interception devient une chasse
+        # arrière perdue (vedette 8 m/s > escorte 6 m/s, run rig r-000004).
+        # Le suivi est NON borné : une station bornée plus serrée que le
+        # rayon de giration (v/ω = 120 m > 55 m) ne devient jamais terminale
+        # (run r-000005) — c'est la replanification sur changement de
+        # situation (controller) qui fait basculer vers l'engagement quand
+        # la menace apparaît.
         if protege is None:
             return False
         return follow_target_m(state, agent, protege, None)
-    follow = follow_target_m(state, agent, threat, ENGAGE_STANDOFF_DEG)
+    # Sans protégé observé, rien à garder : engagement non contraint.
+    envelope = (protege, ENGAGE_ENVELOPE_DEG) if protege is not None else None
+    follow = follow_target_m(state, agent, threat, ENGAGE_STANDOFF_DEG, envelope)
     attack = attack_target_m(state, agent, threat)
     if not isinstance(follow, list) or not isinstance(attack, list):
         return False

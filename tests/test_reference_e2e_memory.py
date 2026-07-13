@@ -23,18 +23,24 @@ def test_ormuz_full_chain_reaches_success_verdict():
     runtime.tick(fake.snapshot(10, {"cargo_1": (26.5520, 56.4000),
                                     "escorte": (26.5515, 56.4000)}))
     assert "rouge" in fake.spawned_forces
+    # L'interception se joue DANS l'enveloppe d'engagement : escorte à
+    # 0.0011 du cargo (< ENGAGE_ENVELOPE_DEG), au contact de vedette_1.
     runtime.tick(fake.snapshot(20, {"cargo_1": (26.5540, 56.4000),
-                                    "escorte": (26.5530, 56.4020),
-                                    "vedette_1": (26.5531, 56.4020),
+                                    "escorte": (26.5544, 56.4010),
+                                    "vedette_1": (26.5545, 56.4010),
                                     "vedette_2": (26.5532, 56.4030)}))
     runtime.tick(fake.snapshot(23, {"cargo_1": (26.5569, 56.4000),
-                                    "escorte": (26.5530, 56.4020),
+                                    "escorte": (26.5544, 56.4010),
                                     "vedette_2": (26.5532, 56.4030)}))
     assert "vedette_1" in fake.deleted
     runtime.tick(fake.snapshot(30, {"cargo_1": (26.5570, 56.4000),
-                                    "escorte": (26.5530, 56.4020),
+                                    "escorte": (26.5544, 56.4010),
                                     "vedette_2": (26.5530, 56.4060)}))
     assert runtime.verdict is Verdict.SUCCEEDED
+    # L'échappée de vedette_2 fait partie du scénario de référence : au
+    # moment du replan (perte de vedette_1), le cargo a filé — l'escorte est
+    # hors enveloppe, elle revient au poste au lieu de chasser le fuyard.
+    assert "vedette_2" not in fake.deleted
 
 
 def test_ormuz_fails_when_cargo_is_destroyed():

@@ -257,13 +257,17 @@ class MissionSupervisor:
             return 'navigation.goto', {
                 'target': [lat, lon], 'arrival_radius_deg': arrival_radius_deg}
         if kind == 'follow_target':
-            _, _agent, target, stop_distance_deg = primitive
+            _, _agent, target, stop_distance_deg, *rest = primitive
             params: dict[str, Any] = {
                 'target_agent': target,
                 'update_threshold_deg': self._update_threshold_deg,
             }
             if stop_distance_deg is not None:
                 params['stop_distance_deg'] = stop_distance_deg
+            if rest:  # 5e élément optionnel : enveloppe (ancre, rayon)
+                anchor, beyond_deg = rest[0]
+                params['abandon_anchor_agent'] = anchor
+                params['abandon_beyond_deg'] = beyond_deg
             return 'navigation.follow_target', params
         if kind == 'attack_target':
             _, _agent, target = primitive

@@ -413,7 +413,7 @@
       ]
     },
     "escorter_convoi": {
-      "label": "Doctrine v3 : escorter — poste tenu sur le protégé sans menace, interception (follow_target puis attack_target) sinon ; protégé et menace dérivés des relations du scénario",
+      "label": "Doctrine v3 : escorter — poste tenu sur le protégé sans menace, interception (follow_target puis attack_target) dans l'enveloppe d'engagement sinon ; protégé et menace dérivés des relations du scénario, l'escorte ne s'éloigne pas de sa charge",
       "args": [
         "agent"
       ]

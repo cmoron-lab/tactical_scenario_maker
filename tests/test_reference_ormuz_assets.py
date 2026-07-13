@@ -107,9 +107,11 @@ def test_find_plan_produces_primitive_tuples_through_real_registration():
     # poursuivre : cible désignée par la mission (référent du scénario)
     assert planner.find_plan(state, ('poursuivre', 'vedette_1', 'cargo_1')) == \
         [('follow_target', 'vedette_1', 'cargo_1', None)]
-    # escorter_convoi : menace = plus proche hostile au protégé (relations)
+    # escorter_convoi : menace = plus proche hostile au protégé (relations) ;
+    # la poursuite porte l'enveloppe d'engagement ancrée sur le protégé
     assert planner.find_plan(state, ('escorter_convoi', 'escorte')) == [
-        ('follow_target', 'escorte', 'vedette_1', 0.00045),
+        ('follow_target', 'escorte', 'vedette_1', 0.00045,
+         ('cargo_1', methods.ENGAGE_ENVELOPE_DEG)),
         ('attack_target', 'escorte', 'vedette_1'),
     ]
     # repli_apres_perte nominal : poursuite du plus proche hostile (cargo_1

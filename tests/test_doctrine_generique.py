@@ -34,10 +34,25 @@ def test_escorte_intercepte_la_menace_la_plus_proche_du_scenario_renomme():
         'skiff_1': {'available': True, 'pos': {'lat': 10.002, 'lon': 20.0}},
         'skiff_2': {'available': True, 'pos': {'lat': 10.010, 'lon': 20.0}},
     }, _FORCES, _RELATIONS)
+    # La poursuite porte l'enveloppe : ancre = protégé le plus proche.
     assert methods.escorter_convoi_m(state, 'fregate') == [
-        ('follow_target', 'fregate', 'skiff_1', methods.ENGAGE_STANDOFF_DEG),
+        ('follow_target', 'fregate', 'skiff_1', methods.ENGAGE_STANDOFF_DEG,
+         ('tanker_a', methods.ENGAGE_ENVELOPE_DEG)),
         ('attack_target', 'fregate', 'skiff_1'),
     ]
+
+
+def test_escorte_hors_enveloppe_revient_au_poste_au_lieu_de_chasser():
+    # L'escorte ne s'éloigne pas de sa charge : au-delà de l'enveloppe
+    # d'engagement (distance escorte↔protégé), une menace visible n'est
+    # plus chassée — retour au poste.
+    state = _state({
+        'fregate': {'available': True, 'pos': {'lat': 10.002, 'lon': 20.0}},
+        'tanker_a': {'available': True, 'pos': {'lat': 10.0, 'lon': 20.0}},
+        'skiff_1': {'available': True, 'pos': {'lat': 10.003, 'lon': 20.0}},
+    }, _FORCES, _RELATIONS)
+    assert methods.escorter_convoi_m(state, 'fregate') == [
+        ('follow_target', 'fregate', 'tanker_a', None)]
 
 
 def test_escorte_tient_le_poste_sur_le_protege_le_plus_proche_sans_menace():
