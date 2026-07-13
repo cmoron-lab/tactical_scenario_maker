@@ -53,6 +53,12 @@ démarrage : après un changement de checkout, relancer `app.py`.
     # 4. Frontend, sur le Mac (REST/WS :5050 uniquement, pas de ROS) :
     cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev   # → :5173
 
+Suivre un run sur la carte LOTUSim : `http://localhost:5173` (ou le lien
+« Ouvrir l'IHM LOTUSim » de l'onglet Exécution) — flotte en direct,
+vitesses, traînées ; l'embuscade et la disparition de vedette_1 s'y
+observent en temps réel. L'onglet Exécution de tsm (:8080) reste la vue
+« cellule blanche » : timeline d'événements, verdict, provenance.
+
 Séquence détaillée, vérifications, teardown et pièges : `docs/rig-e2e.md`.
 
 ## Développement
