@@ -272,6 +272,12 @@ class ReferenceScenario:
         if not isinstance(triggers_doc, list):
             raise ScenarioError('triggers manquant ou invalide')
 
+        for collection, keys in (('forces', forces_doc), ('zones', zones_doc), ('agents', agents_doc)):
+            for key in keys:
+                if not _NAME_RE.match(key):
+                    raise ScenarioError(
+                        f'{collection}.{key!r}: nom invalide (identifiant attendu : lettres, chiffres, _ ou -)')
+
         return cls(
             forces={name: ForceSpec.from_dict(f, where=f'forces.{name}')
                     for name, f in forces_doc.items()},

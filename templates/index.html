@@ -2121,7 +2121,8 @@ function addV2Zone() {
 
 function renameV2Zone(oldName, newName) {
   newName = newName.trim();
-  if (!newName || newName === oldName || v2doc.zones[newName]) { renderV2Zones(); return; }
+  if (!v2ValidName(newName)) { renderV2Zones(); return; }
+  if (newName === oldName || v2doc.zones[newName]) { renderV2Zones(); return; }
   v2doc.zones[newName] = v2doc.zones[oldName];
   delete v2doc.zones[oldName];
   renderV2Zones();
@@ -2135,6 +2136,12 @@ function deleteV2Zone(name) {
 function showV2Status(msg, isError) {
   document.getElementById('launch-status').innerHTML =
     `<div class="exec-info-row"><span class="exec-info-val" style="color:${isError ? 'var(--red, #b3261e)' : 'inherit'}">${escHtml(msg)}</span></div>`;
+}
+
+function v2ValidName(name) {
+  if (/^[A-Za-z0-9_-]+$/.test(name)) return true;
+  showV2Status(`Nom invalide « ${escHtml(name)} » : lettres, chiffres, _ ou - uniquement.`, true);
+  return false;
 }
 
 function saveScenarioV2() {

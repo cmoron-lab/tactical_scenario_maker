@@ -122,3 +122,40 @@ def test_save_reference_scenario_round_trips(tmp_path):
     scenario = load_reference_scenario('escorte_ormuz')
     save_reference_scenario('copie_ormuz', scenario, directory=tmp_path)
     assert load_reference_scenario('copie_ormuz', directory=tmp_path) == scenario
+
+
+def _base_doc():
+    return {
+        "version": 2, "information_policy": "omniscient",
+        "forces": {"bleue": {"agents": ["cargo"]}}, "relations": [],
+        "zones": {"sortie": {"center": {"lat": 1.0, "lon": 2.0}, "radius_deg": 0.001}},
+        "triggers": [],
+        "agents": {"cargo": {
+            "platform": "surface_vessel",
+            "position": {"lat": 1.0, "lon": 2.0},
+            "mission": {"task": "transiter", "args": ["cargo", "sortie"]},
+            "conditions": {},
+        }},
+        "end": {"success": [], "failure": [], "timeout": "PT60S"},
+    }
+
+
+def test_v2_zone_key_must_be_an_identifier():
+    doc = _base_doc()
+    doc["zones"]["zone d'appui"] = {"center": {"lat": 26.55, "lon": 56.40}, "radius_deg": 0.0002}
+    with pytest.raises(ScenarioError, match="zones"):
+        ReferenceScenario.from_dict(doc)
+
+
+def test_v2_force_key_must_be_an_identifier():
+    doc = _base_doc()
+    doc["forces"]["force d'appui"] = {"agents": []}
+    with pytest.raises(ScenarioError, match="forces"):
+        ReferenceScenario.from_dict(doc)
+
+
+def test_v2_agent_key_must_be_an_identifier():
+    doc = _base_doc()
+    doc["agents"]["agent d'appui"] = doc["agents"]["cargo"]
+    with pytest.raises(ScenarioError, match="agents"):
+        ReferenceScenario.from_dict(doc)
