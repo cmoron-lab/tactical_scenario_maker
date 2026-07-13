@@ -285,6 +285,44 @@ def test_validate_scenario_reports_self_referent_mismatch(tmp_path):
     assert result['ok'] is False
 
 
+# ── Amendements post-review Task 5 : conditions et actions de trigger ────────
+
+def test_validate_scenario_reports_all_in_zone_missing_force_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['end']['success'][0]['force'] = ''
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('end.success[0]' in e and 'force' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_agent_destroyed_without_carrier_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['end']['failure'][0] = {'type': 'agent_destroyed'}
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('end.failure[0]' in e and 'porteur' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_trigger_without_action_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['triggers'][0]['do'] = []
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('embuscade-rouge' in e and 'sans action' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_trigger_action_unknown_force_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['triggers'][0]['do'] = [{'type': 'spawn_force', 'force': 'force_inexistante'}]
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('force_inexistante' in e for e in result['errors'])
+
+
 def test_launch_v2_scenario_with_invalid_referent_rejected_before_spawn(tmp_path, monkeypatch):
     # Un référent invalide fait un 400 AVANT le spawn du run — sinon
     # timeout silencieux (goto_m → False à chaque tick, cf. controller.py).

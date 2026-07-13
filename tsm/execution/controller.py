@@ -113,12 +113,70 @@ def v3_mission_tasks(kb: Mapping[str, Any]) -> list[str]:
     return sorted(names)
 
 
-def validate_mission_referents(scenario: ReferenceScenario, kb: Mapping[str, Any]) -> None:
-    """Cohérence des référents de mission (§4.5) : args[0] = l'agent lui-même,
-    chaque extra vérifié contre sa collection selon la signature déclarée
-    (kb['leaf_tasks'][task]['args'], kinds 'zone'/'agent'). Une mission vers un
-    référent inconnu rendrait l'agent inerte (goto_m → False à chaque tick)
-    jusqu'au timeout — refus explicite plutôt que dégradation silencieuse."""
+_CONDITION_TYPES = ('in_zone', 'all_in_zone', 'agent_destroyed')
+
+
+def _validate_condition(where: str, condition: Mapping[str, Any],
+                        scenario: ReferenceScenario) -> None:
+    kind = condition.get('type')
+    if kind not in _CONDITION_TYPES:
+        raise ScenarioError(f'{where}: type de condition inconnu: {kind!r}')
+    if kind == 'in_zone':
+        agent, zone = condition.get('agent'), condition.get('zone')
+        if agent not in scenario.agents:
+            raise ScenarioError(f'{where}: agent {agent!r} inconnu')
+        if zone not in scenario.zones:
+            raise ScenarioError(f'{where}: zone {zone!r} inconnue')
+    elif kind == 'all_in_zone':
+        force, zone = condition.get('force'), condition.get('zone')
+        if force not in scenario.forces:
+            raise ScenarioError(f'{where}: force {force!r} inconnue')
+        if zone not in scenario.zones:
+            raise ScenarioError(f'{where}: zone {zone!r} inconnue')
+    else:  # agent_destroyed : exactement un porteur valide (agent XOR force)
+        has_agent = 'agent' in condition and condition['agent'] in scenario.agents
+        has_force = 'force' in condition and condition['force'] in scenario.forces
+        if has_agent == has_force:
+            raise ScenarioError(
+                f"{where}: agent_destroyed exige exactement un porteur "
+                f"('agent' ou 'force') valide")
+
+
+def _condition_sources(scenario: ReferenceScenario) -> list[tuple[str, Mapping[str, Any]]]:
+    sources = [(f'trigger {t.id!r}', t.when) for t in scenario.triggers]
+    sources += [(f'end.success[{i}]', c) for i, c in enumerate(scenario.end.success)]
+    sources += [(f'end.failure[{i}]', c) for i, c in enumerate(scenario.end.failure)]
+    return sources
+
+
+def _validate_trigger_actions(scenario: ReferenceScenario) -> None:
+    for t in scenario.triggers:
+        if not t.actions:
+            raise ScenarioError(f'trigger {t.id!r} sans action')
+        for i, action in enumerate(t.actions):
+            if action.get('type') != 'spawn_force':
+                raise ScenarioError(
+                    f"trigger {t.id!r}.do[{i}]: type d'action inconnu: "
+                    f"{action.get('type')!r}")
+            force = action.get('force')
+            if force not in scenario.forces:
+                raise ScenarioError(f'trigger {t.id!r}.do[{i}]: force {force!r} inconnue')
+
+
+def validate_referents(scenario: ReferenceScenario, kb: Mapping[str, Any]) -> None:
+    """Cohérence des référents du scénario (§4.5, étendu en review Task 5) :
+    - mission : args[0] = l'agent lui-même, chaque extra vérifié contre sa
+      collection selon la signature déclarée (kb['leaf_tasks'][task]['args'],
+      kinds 'zone'/'agent'). Une mission vers un référent inconnu rendrait
+      l'agent inerte (goto_m → False à chaque tick) jusqu'au timeout ;
+    - conditions (triggers.when, end.success, end.failure) : type connu,
+      agent/force/zone existants, agent_destroyed avec exactement un porteur ;
+    - actions de trigger : au moins une, de type spawn_force vers une force
+      existante.
+    Sans ce refus explicite, `conditions.evaluate` lève un KeyError non
+    rattrapé qui tue le run sans verdict (démontré en review sur
+    {'type': 'all_in_zone', 'force': ''}, l'état par défaut du bouton
+    + Condition)."""
     leaf = kb.get('leaf_tasks', {})
     for agent, spec in scenario.agents.items():
         args = list(spec.mission.args)
@@ -135,6 +193,9 @@ def validate_mission_referents(scenario: ReferenceScenario, kb: Mapping[str, Any
                 raise ScenarioError(
                     f"{agent}: argument {i + 1} de la mission {spec.mission.task!r} "
                     f"({kind}) invalide: {value!r}")
+    for where, condition in _condition_sources(scenario):
+        _validate_condition(where, condition, scenario)
+    _validate_trigger_actions(scenario)
 
 
 class RunStartError(RuntimeError):
@@ -408,7 +469,8 @@ class RunController:
                     for agent, spec in self._scenario.agents.items()}
         try:
             validate_profile(self._scenario, self._profile, required)
-        except ProfileError as exc:
+            validate_referents(self._scenario, self._kb)
+        except (ProfileError, ScenarioError) as exc:
             self._publish({'type': 'preflight_failed', 'reason': str(exc)})
             raise RunStartError(str(exc)) from exc
 

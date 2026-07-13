@@ -1,4 +1,6 @@
 # tests/test_reference_controller.py
+from dataclasses import replace
+
 import pytest
 
 from tests.reference_fixtures import (
@@ -169,6 +171,21 @@ def test_failed_spawn_leaves_zero_supervisors():
         controller.start_initial_forces()
     with pytest.raises(KeyError):
         controller.supervisor("bleue", "escorte")
+
+
+def test_invalid_end_condition_referent_raises_before_any_supervisor():
+    # Amendement post-review Task 5 : {'type':'all_in_zone','force':''} est
+    # l'état PAR DÉFAUT du bouton + Condition — sans ce garde, il passe
+    # save+validate puis crashe le run (conditions.evaluate → KeyError).
+    scenario = scenario_forces(policy="omniscient", forces={"verte": ("cargo_1",)})
+    scenario = replace(scenario, end=replace(
+        scenario.end,
+        success=({"type": "all_in_zone", "force": "", "zone": "sortie"},)))
+    controller = controller_with(scenario)
+    with pytest.raises(RunStartError, match="force"):
+        controller.start_initial_forces()
+    with pytest.raises(KeyError):
+        controller.supervisor("verte", "cargo_1")
 
 
 # ── spawn_force : force différée créée à la demande, idempotente ─────────────
