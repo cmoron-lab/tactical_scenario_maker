@@ -219,9 +219,15 @@ def _main_v3(scenario_name: str, profile_name: str) -> None:
 
         logs.log_event('run_start', scenario=scenario_name, profile=profile_name,
                        agents=list(scenario.agents))
-        if not wait_first_observation(world_store, wake, timeout_s=10.0):
-            raise RunStartError(
-                'aucune observation du monde reçue (poses LOTUSim indisponibles)')
+        if not wait_first_observation(world_store, wake, timeout_s=3.0):
+            # Pas de pose : monde vide-mais-vivant (l'entity manager ne publie
+            # rien sans navire — constaté sur monde neuf) OU simulateur absent.
+            # Départage par la disponibilité du serveur d'action MASCmd : un
+            # monde vide se purge trivialement, un simulateur muet reste un
+            # échec explicite avant tout spawn.
+            if not client.wait_sim_ready(timeout_s=7.0):
+                raise RunStartError(
+                    'aucune observation du monde reçue (poses LOTUSim indisponibles)')
         controller.start_initial_forces()
         started_sim_time_s = world_store.snapshot().sim_time_s
 

@@ -110,6 +110,16 @@ class LotusimClient:
 
     # ── Commandes LOTUSim ────────────────────────────────────────────────
 
+    def wait_sim_ready(self, timeout_s: float) -> bool:
+        """La simulation répond-elle ? (serveur d'action MASCmd disponible.)
+        Départage un monde vide-mais-vivant — l'entity manager ne publie pas
+        de poses tant qu'aucun navire n'existe — d'un simulateur absent."""
+        client = ActionClient(self._node, MASCmd, MAS_CMD_ACTION)
+        try:
+            return bool(client.wait_for_server(timeout_sec=timeout_s))
+        finally:
+            client.destroy()
+
     def _mas_cmd(self, cmd: Any, operation: str, timeout_s: float) -> Any:
         """Envoie un MASCmd (action) et rend le Result (bool result, name,
         entity) validé — done/exception vérifiés via require_result."""
