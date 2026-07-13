@@ -2307,10 +2307,16 @@ function renameV2Agent(oldName, newName) {
   if (newName === oldName || v2doc.agents[newName]) { renderV2Agents(); return; }
   v2doc.agents[newName] = v2doc.agents[oldName];
   delete v2doc.agents[oldName];
-  const m = v2doc.agents[newName].mission;
-  m.args = m.args.map(x => x === oldName ? newName : x);
-  for (const a of Object.values(v2doc.agents))
-    a.mission.args = a.mission.args.map(x => x === oldName ? newName : x);
+  // Réécriture KIND-AWARE (amendement post-review Task 4) : ne réécrire un
+  // extra que si sa signature le déclare 'agent' — une zone homonyme d'un
+  // agent renommé ne doit pas être corrompue (collision démontrée en review).
+  for (const a of Object.values(v2doc.agents)) {
+    const kinds = v2MissionArgKinds(a.mission.task);
+    a.mission.args = a.mission.args.map((x, idx) => {
+      if (idx === 0) return x === oldName ? newName : x;   // args[0] = self
+      return kinds[idx - 1] === 'agent' && x === oldName ? newName : x;
+    });
+  }
   for (const f of Object.values(v2doc.forces))
     f.agents = f.agents.map(x => x === oldName ? newName : x);
   renderV2Agents(); renderV2Forces();
