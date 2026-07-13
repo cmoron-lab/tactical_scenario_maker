@@ -5,7 +5,18 @@ import time
 
 import pytest
 
+from tsm.domain.scenario import SCENARIOS_DIR
 from tsm.web.runs import RunBusyError, RunManager, _default_cmd
+
+# Même scénario v1 minimal que tests/test_web_api.py::V1_MINIMAL.
+V1_MINIMAL = {
+    "version": 1,
+    "agents": {"veilleur": {
+        "position": {"lat": 1.26, "lon": 103.75}, "heading_deg": 0.0,
+        "model": "wamv", "velocity": {"linear": [0.0, 5.0], "angular_max": 0.05},
+        "conditions": {"role": "patrol", "base_location": "1.26 103.75"},
+        "mission": {"task": "veiller", "args": ["veilleur"]}}},
+}
 
 SLEEP_30 = lambda name, profile=None: [sys.executable, '-c', 'import time; time.sleep(30)']  # noqa: E731
 EXIT_3 = lambda name, profile=None: [sys.executable, '-c', 'import sys; sys.exit(3)']  # noqa: E731
@@ -312,7 +323,16 @@ def test_cli_v2_scenario_without_profile_exits_with_clear_french_error():
 
 
 def test_cli_v1_scenario_with_profile_exits_with_clear_french_error():
-    result = _run_cli('demo_veille_drone_intru', '--profile', 'kinematic-ormuz')
+    # main.py est un vrai sous-processus : `peek_version` y a son `directory`
+    # figé à SCENARIOS_DIR à l'import (cf. task-4-report), donc pas de monkeypatch
+    # possible depuis ce process — le fixture v1 doit exister dans le vrai
+    # scenarios/ le temps de l'appel (nom dédié, jamais utilisé ailleurs).
+    fixture = SCENARIOS_DIR / '_v1_cli_fixture.json'
+    fixture.write_text(json.dumps(V1_MINIMAL), encoding='utf-8')
+    try:
+        result = _run_cli('_v1_cli_fixture', '--profile', 'kinematic-ormuz')
+    finally:
+        fixture.unlink()
     assert result.returncode != 0
     assert 'profile' in result.stderr
 

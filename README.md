@@ -75,27 +75,52 @@ Séquence détaillée, vérifications, teardown et pièges : `docs/rig-e2e.md`.
 | tsm/execution/ | actions/commands, boucle agent, assemblage | Exécutif de mission / supervision (niveau 2) |
 | tsm/lotusim/ | adaptateur ROS (seule frontière de transport ROS ; runtime.py importe aussi rclpy pour init/shutdown) | Frontière LOTUSim / future autonomie (niveau 3) |
 | tsm/web/ | API HTTP locale | Éditeur tactique (provisoire) |
-| scenarios/ | scénarios JSON v1 (l'identité = le nom de fichier) |  |
+| scenarios/ | scénarios JSON v2 — Scenario Request (l'identité = le nom de fichier) |  |
 | doctrine/ | knowledge_base.json — la doctrine HTN |  |
 | attic/ | générateur IA parqué (voir attic/README.md) |  |
 
-## Format de scénario (v1)
+## Format de scénario (v2 — Scenario Request)
+
+Exemple canonique : `scenarios/escorte_ormuz.json` (extrait — forces, relations,
+zones, agents, triggers, end state) :
 
 ```json
 {
-  "version": 1,
+  "version": 2,
+  "information_policy": "omniscient",
+  "forces": {
+    "bleue": {"agents": ["escorte"]},
+    "rouge": {"agents": ["vedette_1", "vedette_2"], "spawn": "deferred"}
+  },
+  "relations": [
+    {"from": "rouge", "to": ["bleue", "verte"], "attitude": "hostile"}
+  ],
+  "zones": {
+    "passe_ormuz": {"center": {"lat": 26.552, "lon": 56.400}, "radius_deg": 0.0008}
+  },
   "agents": {
-    "veilleur": {
-      "position": {"lat": 1.260, "lon": 103.750},
-      "heading_deg": 0.0,
-      "model": "wamv",
-      "velocity": {"linear": [0.0, 5.0], "angular_max": 0.05},
-      "conditions": {"role": "patrol", "base_location": "1.260 103.750"},
-      "mission": {"task": "veiller", "args": ["veilleur"]}
+    "escorte": {
+      "platform": "surface_vessel",
+      "position": {"lat": 26.5496, "lon": 56.400},
+      "mission": {"task": "escorter_convoi", "args": ["escorte"]},
+      "conditions": {}
     }
+  },
+  "triggers": [
+    {"id": "embuscade-rouge",
+     "when": {"type": "in_zone", "agent": "cargo_1", "zone": "passe_ormuz"},
+     "do": [{"type": "spawn_force", "force": "rouge"}]}
+  ],
+  "end": {
+    "success": [{"type": "all_in_zone", "force": "verte", "zone": "sortie_ouest"}],
+    "failure": [{"type": "agent_destroyed", "force": "verte"}],
+    "timeout": "PT240S"
   }
 }
 ```
+
+Les scénarios v1 historiques sont parqués dans `attic/scenarios-v1/` ; le
+format v1 reste lisible par `main.py` sans profil.
 
 ## Limites connues
 

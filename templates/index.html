@@ -1196,8 +1196,7 @@ header {
         <div class="sc-empty">Chargement…</div>
       </div>
       <div class="sidebar-footer">
-        <button class="btn btn-outline btn-full" onclick="newScenario()">+ Nouveau scénario</button>
-        <button class="btn btn-outline btn-full" onclick="newScenarioV2()">+ Nouveau (v2)</button>
+        <button class="btn btn-outline btn-full" onclick="newScenarioV2()">+ Nouveau scénario</button>
       </div>
     </div>
 
@@ -1871,12 +1870,6 @@ function selectScenario(name) {
     }
     loadList();
   });
-}
-
-function newScenario() {
-  current = null;
-  renderEditor('', {}, true);
-  loadList();
 }
 
 let v2doc = null;   // source de vérité du scénario v2 en édition (jamais reconstruit du DOM)

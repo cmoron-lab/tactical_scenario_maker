@@ -1,16 +1,44 @@
 import json
 import sys
 import threading
+from functools import partial
 from http.client import HTTPConnection
 from pathlib import Path
 
 import pytest
 
+import tsm.domain.scenario as scenario_mod
+import tsm.web.api as api_mod
 from tsm.domain.reference import ReferenceScenario
 from tsm.domain.scenario import ScenarioError
 from tsm.web.api import Api
 from tsm.web.runs import RunManager
 from tsm.web.server import make_server
+
+# Scénario v1 minimal (attic/scenarios-v1/demo_veille_drone_intru.json n'est plus
+# shippé dans scenarios/ depuis l'harmonisation v2) : les tests qui exercent le
+# chemin v1 générique (get/plan/launch) le recréent en tmp_path plutôt que de
+# dépendre d'un fichier parqué.
+V1_MINIMAL = {
+    "version": 1,
+    "agents": {"veilleur": {
+        "position": {"lat": 1.26, "lon": 103.75}, "heading_deg": 0.0,
+        "model": "wamv", "velocity": {"linear": [0.0, 5.0], "angular_max": 0.05},
+        "conditions": {"role": "patrol", "base_location": "1.26 103.75"},
+        "mission": {"task": "veiller", "args": ["veilleur"]}}},
+}
+
+
+def _write_v1_scenario(monkeypatch, tmp_path, name='v1_fixture'):
+    """Isole les fonctions v1 (défauts `directory` figés à l'import, cf. task-4-report)
+    sur tmp_path — monkeypatcher `scenario_mod.SCENARIOS_DIR` seul n'a aucun effet sur
+    les appels non qualifiés déjà faits par Api — puis y écrit un scénario minimal."""
+    for fname in ('list_scenarios', 'load_scenario', 'save_scenario',
+                  'delete_scenario', 'peek_version'):
+        monkeypatch.setattr(api_mod, fname, partial(getattr(scenario_mod, fname),
+                                                     directory=tmp_path))
+    (tmp_path / f'{name}.json').write_text(json.dumps(V1_MINIMAL), encoding='utf-8')
+    return name
 
 
 def _get(conn, path):
@@ -25,17 +53,18 @@ def _post(conn, path, body=None):
     return r.status, json.loads(r.read())
 
 
-def test_api_end_to_end_sans_ros(tmp_path):
+def test_api_end_to_end_sans_ros(tmp_path, monkeypatch):
     # RunManager isolé : le défaut lit REPO_ROOT/logs, pollué par les vrais runs.
+    name = _write_v1_scenario(monkeypatch, tmp_path)
     srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port = srv.server_address[1]
     conn = HTTPConnection('127.0.0.1', port)
     try:
         status, names = _get(conn, '/api/scenarios')
-        assert status == 200 and 'demo_veille_drone_intru' in names
+        assert status == 200 and name in names
 
-        status, doc = _get(conn, '/api/scenario/demo_veille_drone_intru')
+        status, doc = _get(conn, f'/api/scenario/{name}')
         assert status == 200 and doc['version'] == 1 and 'veilleur' in doc['agents']
 
         status, run = _get(conn, '/api/run')
@@ -47,13 +76,13 @@ def test_api_end_to_end_sans_ros(tmp_path):
         status, events = _get(conn, '/api/run/events?since=0')
         assert status == 200 and events == {'events': [], 'next': 0}
 
-        status, plans = _get(conn, '/api/scenario/demo_veille_drone_intru/plan')
+        status, plans = _get(conn, f'/api/scenario/{name}/plan')
         assert status == 200 and set(plans) == set(doc['agents'])
 
         status, _ = _get(conn, '/api/scenario/inconnu')
         assert status == 404
 
-        conn.request('POST', '/api/scenario/demo_veille_drone_intru',
+        conn.request('POST', f'/api/scenario/{name}',
                      body=json.dumps({'version': 99}),
                      headers={'Content-Type': 'application/json'})
         assert conn.getresponse().status == 400  # ScenarioError → message explicite
@@ -66,7 +95,8 @@ def test_api_end_to_end_sans_ros(tmp_path):
         srv.shutdown()
 
 
-def test_launch_twice_returns_409(tmp_path):
+def test_launch_twice_returns_409(tmp_path, monkeypatch):
+    name = _write_v1_scenario(monkeypatch, tmp_path)
     cmd = lambda name, profile=None: [sys.executable, '-c', 'import time; time.sleep(2)']  # noqa: E731
     rm = RunManager(cmd=cmd, logs_dir=tmp_path)
     srv = make_server(port=0, api=Api(run_manager=rm))
@@ -74,12 +104,12 @@ def test_launch_twice_returns_409(tmp_path):
     port = srv.server_address[1]
     conn = HTTPConnection('127.0.0.1', port)
     try:
-        status, resp = _post(conn, '/api/scenario/demo_veille_drone_intru/launch')
+        status, resp = _post(conn, f'/api/scenario/{name}/launch')
         assert status == 200 and resp['ok'] is True
 
-        status, resp = _post(conn, '/api/scenario/demo_veille_drone_intru/launch')
+        status, resp = _post(conn, f'/api/scenario/{name}/launch')
         assert status == 409
-        assert resp == {'error': 'run déjà en cours', 'scenario': 'demo_veille_drone_intru'}
+        assert resp == {'error': 'run déjà en cours', 'scenario': name}
 
         status, resp = _post(conn, '/api/run/stop')
         assert status == 200 and resp == {'ok': True}
@@ -126,13 +156,14 @@ def test_launch_v2_scenario_without_profile_is_400(tmp_path):
         srv.shutdown()
 
 
-def test_launch_v1_scenario_with_profile_is_400(tmp_path):
+def test_launch_v1_scenario_with_profile_is_400(tmp_path, monkeypatch):
+    name = _write_v1_scenario(monkeypatch, tmp_path)
     srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port = srv.server_address[1]
     conn = HTTPConnection('127.0.0.1', port)
     try:
-        status, resp = _post(conn, '/api/scenario/demo_veille_drone_intru/launch',
+        status, resp = _post(conn, f'/api/scenario/{name}/launch',
                              {'profile': 'kinematic-ormuz'})
         assert status == 400
         assert 'profil' in resp['error']
