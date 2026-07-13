@@ -48,7 +48,7 @@ def test_ormuz_fails_when_cargo_is_destroyed():
 def test_ormuz_times_out_without_progress():
     runtime, fake = in_memory_runtime("escorte_ormuz", "kinematic-ormuz")
     runtime.start()
-    runtime.tick(fake.snapshot(180, {"cargo_1": (26.5500, 56.4000),
+    runtime.tick(fake.snapshot(240, {"cargo_1": (26.5500, 56.4000),
                                      "escorte": (26.5498, 56.3997)}))
     assert runtime.verdict is Verdict.TIMED_OUT
 

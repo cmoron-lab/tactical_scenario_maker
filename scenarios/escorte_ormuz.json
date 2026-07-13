@@ -49,6 +49,6 @@
   "end": {
     "success": [{"type": "all_in_zone", "force": "verte", "zone": "sortie_ouest"}],
     "failure": [{"type": "agent_destroyed", "force": "verte"}],
-    "timeout": "PT180S"
+    "timeout": "PT240S"
   }
 }
