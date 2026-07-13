@@ -1197,6 +1197,7 @@ header {
       </div>
       <div class="sidebar-footer">
         <button class="btn btn-outline btn-full" onclick="newScenario()">+ Nouveau scénario</button>
+        <button class="btn btn-outline btn-full" onclick="newScenarioV2()">+ Nouveau (v2)</button>
       </div>
     </div>
 
@@ -1863,7 +1864,8 @@ function selectScenario(name) {
   current = name;
   fetch(`/api/scenario/${name}`).then(r => r.json()).then(doc => {
     if (doc.version === 2) {
-      renderReadOnlyScenario(name, doc);
+      v2doc = doc;
+      renderEditorV2(name, false);
     } else {
       renderEditor(name, doc.agents, false);
     }
@@ -1874,6 +1876,17 @@ function selectScenario(name) {
 function newScenario() {
   current = null;
   renderEditor('', {}, true);
+  loadList();
+}
+
+let v2doc = null;   // source de vérité du scénario v2 en édition (jamais reconstruit du DOM)
+
+function newScenarioV2() {
+  current = null;
+  v2doc = { version: 2, information_policy: 'omniscient',
+            forces: {}, relations: [], zones: {}, agents: {},
+            triggers: [], end: { success: [], failure: [], timeout: 'PT240S' } };
+  renderEditorV2('', true);
   loadList();
 }
 
@@ -2021,43 +2034,23 @@ function conditionRows(label, conditions) {
         <div class="exec-info-row"><span class="exec-info-label">${label}${conditions.length > 1 ? ' ' + (i + 1) : ''}</span><span class="exec-info-val">${describeCondition(c)}</span></div>`).join('');
 }
 
-// ── Scénario v2 (Scenario Request) : fiche lecture seule ────────────────────
-// Pas d'éditeur v1 pour ces scénarios (forces/relations/triggers/end state —
-// un tout autre schéma) : juste un résumé + le choix du profil d'exécution
-// pour le lancement (décision 9 du plan Task 7).
-function renderReadOnlyScenario(name, doc) {
+// ── Éditeur v2 (Scenario Request) ────────────────────────────────────────────
+function renderEditorV2(name, isNew) {
   document.getElementById('editor').innerHTML = `
     <div class="scenario-bar">
-      <span class="sc-name-input" style="border-color:transparent;background:transparent;padding-left:0;color:var(--navy)">${escHtml(name)}</span>
-      <span class="sc-file-pill">v2 · lecture seule</span>
+      <input class="sc-name-input" id="sc-name-inp" value="${escHtml(name)}"
+        placeholder="Nom du scénario" ${isNew ? '' : 'readonly'}>
+      <span class="sc-file-pill">v2</span>
     </div>
-    <div class="agent-card">
-      <div class="agent-head"><span class="agent-name-display">Forces</span></div>
-      <div class="exec-card-body">
-        ${Object.entries(doc.forces || {}).map(([fname, f]) => `
-          <div class="exec-info-row">
-            <span class="exec-info-label">${escHtml(fname)}${f.spawn === 'deferred' ? ' (différée)' : ''}</span>
-            <span class="exec-info-val">${(f.agents || []).map(escHtml).join(', ')}</span>
-          </div>`).join('') || '<p class="exec-empty">Aucune force.</p>'}
-      </div>
-    </div>
-    <div class="agent-card">
-      <div class="agent-head"><span class="agent-name-display">Agents</span></div>
-      <div class="exec-card-body">
-        ${Object.entries(doc.agents || {}).map(([aname, a]) => `
-          <div class="exec-info-row">
-            <span class="exec-info-label">${escHtml(aname)} · ${escHtml(a.platform || '')}</span>
-            <span class="exec-info-val">${escHtml(a.mission?.task || '—')}</span>
-          </div>`).join('') || '<p class="exec-empty">Aucun agent.</p>'}
-      </div>
-    </div>
-    <div class="agent-card">
-      <div class="agent-head"><span class="agent-name-display">Fin de scénario</span></div>
-      <div class="exec-card-body">
-        ${conditionRows('Succès', doc.end?.success)}
-        ${conditionRows('Échec', doc.end?.failure)}
-        <div class="exec-info-row"><span class="exec-info-label">Timeout</span><span class="exec-info-val">${escHtml(doc.end?.timeout || '—')}</span></div>
-      </div>
+    <div id="v2-zones"></div>
+    <div id="v2-forces"></div>
+    <div id="v2-relations"></div>
+    <div id="v2-agents"></div>
+    <div id="v2-triggers"></div>
+    <div id="v2-end"></div>
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="saveScenarioV2()">Enregistrer</button>
+      <button class="btn btn-navy" onclick="validateScenarioV2()">Valider (profil)</button>
     </div>
     <div class="agent-card">
       <div class="agent-head"><span class="agent-name-display">Lancement</span></div>
@@ -2066,11 +2059,18 @@ function renderReadOnlyScenario(name, doc) {
           <label>Profil d'exécution</label>
           <select id="profile-select" disabled><option value="">Chargement…</option></select>
         </div>
-        <button class="btn btn-launch" data-profiles="pending" disabled style="margin-top:14px" onclick="launchScenarioV2('${name}')">▶ Lancer sur Lotusim</button>
+        <button class="btn btn-launch" data-profiles="pending" disabled style="margin-top:14px"
+          onclick="launchScenarioV2(document.getElementById('sc-name-inp').value.trim())">▶ Lancer sur Lotusim</button>
       </div>
     </div>
     <div id="launch-status"></div>
   `;
+  renderV2Zones();
+  if (typeof renderV2Forces === 'function') renderV2Forces();
+  if (typeof renderV2Relations === 'function') renderV2Relations();
+  if (typeof renderV2Agents === 'function') renderV2Agents();
+  if (typeof renderV2Triggers === 'function') renderV2Triggers();
+  if (typeof renderV2End === 'function') renderV2End();
   fetch('/api/profiles').then(r => r.json()).then(names => {
     const sel = document.getElementById('profile-select');
     if (!sel) return;
@@ -2081,10 +2081,88 @@ function renderReadOnlyScenario(name, doc) {
       sel.disabled = false;
       const btn = document.querySelector('.btn-launch');
       if (btn) delete btn.dataset.profiles;
-      updateLaunchButtonState();  // relâche le bouton maintenant que le select est peuplé
+      updateLaunchButtonState();
     }
   });
   updateLaunchButtonState();
+}
+
+function renderV2Zones() {
+  const rows = Object.entries(v2doc.zones).map(([zname, z]) => `
+    <div class="form-grid">
+      <div class="field"><label>Nom</label>
+        <input value="${escHtml(zname)}" onchange="renameV2Zone('${zname}', this.value)"></div>
+      <div class="field"><label>Latitude</label>
+        <input type="number" step="any" value="${z.center.lat}"
+          onchange="v2doc.zones['${zname}'].center.lat = parseFloat(this.value)"></div>
+      <div class="field"><label>Longitude</label>
+        <input type="number" step="any" value="${z.center.lon}"
+          onchange="v2doc.zones['${zname}'].center.lon = parseFloat(this.value)"></div>
+      <div class="field"><label>Rayon (°)</label>
+        <input type="number" step="any" value="${z.radius_deg}"
+          onchange="v2doc.zones['${zname}'].radius_deg = parseFloat(this.value)"></div>
+      <div class="field"><label>&nbsp;</label>
+        <button class="agent-remove" onclick="deleteV2Zone('${zname}')">Supprimer</button></div>
+    </div>`).join('');
+  document.getElementById('v2-zones').innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Zones</span>
+        <button class="btn btn-ghost" onclick="addV2Zone()">+ Zone</button></div>
+      <div class="exec-card-body">${rows || '<p class="exec-empty">Aucune zone.</p>'}</div>
+    </div>`;
+}
+
+function addV2Zone() {
+  let n = 1;
+  while (v2doc.zones[`zone_${n}`]) n++;
+  v2doc.zones[`zone_${n}`] = { center: { lat: 26.5520, lon: 56.4000 }, radius_deg: 0.0002 };
+  renderV2Zones();
+}
+
+function renameV2Zone(oldName, newName) {
+  newName = newName.trim();
+  if (!newName || newName === oldName || v2doc.zones[newName]) { renderV2Zones(); return; }
+  v2doc.zones[newName] = v2doc.zones[oldName];
+  delete v2doc.zones[oldName];
+  renderV2Zones();
+}
+
+function deleteV2Zone(name) {
+  delete v2doc.zones[name];
+  renderV2Zones();
+}
+
+function showV2Status(msg, isError) {
+  document.getElementById('launch-status').innerHTML =
+    `<div class="exec-info-row"><span class="exec-info-val" style="color:${isError ? 'var(--red, #b3261e)' : 'inherit'}">${escHtml(msg)}</span></div>`;
+}
+
+function saveScenarioV2() {
+  const name = document.getElementById('sc-name-inp').value.trim();
+  if (!name) { showV2Status('Nom de scénario requis.', true); return; }
+  fetch(`/api/scenario/${name}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(v2doc),
+  }).then(r => r.json().then(d => ({ httpOk: r.ok, d })))
+    .then(({ httpOk, d }) => {
+      if (!httpOk) { showV2Status(d.error || 'Erreur de sauvegarde', true); return; }
+      current = name;
+      document.getElementById('sc-name-inp').setAttribute('readonly', '');
+      showV2Status('Scénario enregistré.', false);
+      loadList();
+    });
+}
+
+function validateScenarioV2() {
+  const profile = document.getElementById('profile-select')?.value;
+  if (!profile) { showV2Status('Choisir un profil pour valider.', true); return; }
+  fetch(`/api/scenario/${current || 'nouveau'}/validate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario: v2doc, profile }),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) showV2Status(`✓ Compatible avec le profil ${profile}.`, false);
+    else showV2Status((d.errors || [d.error || 'validation échouée']).join(' — '), true);
+  });
 }
 
 function parseMission(m) {
