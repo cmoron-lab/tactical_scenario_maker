@@ -2140,7 +2140,8 @@ function showV2Status(msg, isError) {
 
 function v2ValidName(name) {
   if (/^[A-Za-z0-9_-]+$/.test(name)) return true;
-  showV2Status(`Nom invalide « ${escHtml(name)} » : lettres, chiffres, _ ou - uniquement.`, true);
+  // name brut : showV2Status échappe déjà tout le message (escHtml ici = double échappement)
+  showV2Status(`Nom invalide « ${name} » : lettres, chiffres, _ ou - uniquement.`, true);
   return false;
 }
 
