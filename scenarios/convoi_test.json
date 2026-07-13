@@ -1,0 +1,156 @@
+{
+  "version": 2,
+  "information_policy": "omniscient",
+  "forces": {
+    "marchande": {
+      "agents": [
+        "cargo_1"
+      ]
+    },
+    "alpha": {
+      "agents": [
+        "escorte"
+      ]
+    },
+    "pirates": {
+      "agents": [
+        "vedette_1",
+        "vedette_2"
+      ],
+      "spawn": "deferred"
+    }
+  },
+  "relations": [
+    {
+      "from": "pirates",
+      "to": [
+        "marchande",
+        "alpha"
+      ],
+      "attitude": "hostile"
+    },
+    {
+      "from": "alpha",
+      "to": [
+        "marchande"
+      ],
+      "attitude": "protect"
+    }
+  ],
+  "zones": {
+    "passe_test": {
+      "center": {
+        "lat": 26.552,
+        "lon": 56.4
+      },
+      "radius_deg": 0.0008
+    },
+    "sortie_test": {
+      "center": {
+        "lat": 26.557,
+        "lon": 56.4
+      },
+      "radius_deg": 0.00015
+    },
+    "refuge_test": {
+      "center": {
+        "lat": 26.553,
+        "lon": 56.406
+      },
+      "radius_deg": 0.00015
+    }
+  },
+  "agents": {
+    "cargo_1": {
+      "platform": "surface_vessel",
+      "position": {
+        "lat": 26.5498,
+        "lon": 56.4
+      },
+      "mission": {
+        "task": "transiter_vers_zone",
+        "args": [
+          "cargo_1",
+          "sortie_test"
+        ]
+      },
+      "conditions": {}
+    },
+    "escorte": {
+      "platform": "surface_vessel",
+      "position": {
+        "lat": 26.5496,
+        "lon": 56.4
+      },
+      "mission": {
+        "task": "escorter_convoi",
+        "args": [
+          "escorte"
+        ]
+      },
+      "conditions": {}
+    },
+    "vedette_1": {
+      "platform": "surface_vessel",
+      "position": {
+        "lat": 26.553,
+        "lon": 56.402
+      },
+      "mission": {
+        "task": "poursuivre",
+        "args": [
+          "vedette_1",
+          "cargo_1"
+        ]
+      },
+      "conditions": {}
+    },
+    "vedette_2": {
+      "platform": "surface_vessel",
+      "position": {
+        "lat": 26.5532,
+        "lon": 56.403
+      },
+      "mission": {
+        "task": "repli_apres_perte",
+        "args": [
+          "vedette_2",
+          "refuge_test"
+        ]
+      },
+      "conditions": {}
+    }
+  },
+  "triggers": [
+    {
+      "id": "embuscade-test",
+      "when": {
+        "type": "in_zone",
+        "agent": "cargo_1",
+        "zone": "passe_test"
+      },
+      "do": [
+        {
+          "type": "spawn_force",
+          "force": "pirates"
+        }
+      ]
+    }
+  ],
+  "end": {
+    "success": [
+      {
+        "type": "all_in_zone",
+        "force": "marchande",
+        "zone": "sortie_test"
+      }
+    ],
+    "failure": [
+      {
+        "type": "agent_destroyed",
+        "force": "marchande"
+      }
+    ],
+    "timeout": "PT240S"
+  }
+}
