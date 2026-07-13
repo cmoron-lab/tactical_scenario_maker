@@ -354,6 +354,27 @@ def test_validate_scenario_reports_trigger_action_unknown_force_in_french(tmp_pa
     assert any('force_inexistante' in e for e in result['errors'])
 
 
+# ── Amendements post-review finale : jouabilité et arité de la mission ───────
+
+def test_validate_scenario_reports_unplayable_task_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_1']['mission'] = {'task': 'tache_bidon', 'args': ['vedette_1']}
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('vedette_1' in e and 'injouable' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_mission_arity_mismatch_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_1']['mission'] = {
+        'task': 'poursuivre', 'args': ['vedette_1', 'cargo_1', 'junk']}
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('vedette_1' in e and 'attend' in e for e in result['errors'])
+
+
 def test_launch_v2_scenario_with_invalid_referent_rejected_before_spawn(tmp_path, monkeypatch):
     # Un référent invalide fait un 400 AVANT le spawn du run — sinon
     # timeout silencieux (goto_m → False à chaque tick, cf. controller.py).

@@ -164,11 +164,17 @@ def _validate_trigger_actions(scenario: ReferenceScenario) -> None:
 
 
 def validate_referents(scenario: ReferenceScenario, kb: Mapping[str, Any]) -> None:
-    """Cohérence des référents du scénario (§4.5, étendu en review Task 5) :
-    - mission : args[0] = l'agent lui-même, chaque extra vérifié contre sa
-      collection selon la signature déclarée (kb['leaf_tasks'][task]['args'],
-      kinds 'zone'/'agent'). Une mission vers un référent inconnu rendrait
-      l'agent inerte (goto_m → False à chaque tick) jusqu'au timeout ;
+    """Cohérence des référents du scénario (§4.5, étendu en review Task 5 puis
+    en review finale) :
+    - mission : la tâche doit être jouable (offerte par v3_mission_tasks —
+      sinon gtpyhop lève « isn't an action, task... » sans verdict au run) ;
+      l'arité doit correspondre à la signature déclarée (kb['leaf_tasks']
+      [task]['args'] — sinon un TypeError natif de la méthode Python tue le
+      run, ex. poursuivre_m() avec un argument surnuméraire) ; args[0] =
+      l'agent lui-même ; chaque extra vérifié contre sa collection selon les
+      kinds 'zone'/'agent' de la signature. Une mission vers un référent
+      inconnu rendrait l'agent inerte (goto_m → False à chaque tick) jusqu'au
+      timeout ;
     - conditions (triggers.when, end.success, end.failure) : type connu,
       agent/force/zone existants, agent_destroyed avec exactement un porteur ;
     - actions de trigger : au moins une, de type spawn_force vers une force
@@ -178,12 +184,21 @@ def validate_referents(scenario: ReferenceScenario, kb: Mapping[str, Any]) -> No
     {'type': 'all_in_zone', 'force': ''}, l'état par défaut du bouton
     + Condition)."""
     leaf = kb.get('leaf_tasks', {})
+    playable = set(v3_mission_tasks(kb))
     for agent, spec in scenario.agents.items():
+        task = spec.mission.task
+        if task not in playable:
+            raise ScenarioError(f"{agent}: tâche de mission injouable: {task!r}")
         args = list(spec.mission.args)
+        signature = list(leaf.get(task, {}).get('args') or ['agent'])
+        if len(args) != len(signature):
+            raise ScenarioError(
+                f"{agent}: la mission {task!r} attend {len(signature) - 1} "
+                f"argument(s) de référent, {len(args) - 1} fourni(s)")
         if args[:1] != [agent]:
             raise ScenarioError(
                 f"{agent}: mission.args[0] doit être l'agent lui-même ({args[:1]!r})")
-        kinds = list((leaf.get(spec.mission.task, {}).get('args') or ['agent']))[1:]
+        kinds = signature[1:]
         for i, kind in enumerate(kinds):
             if kind not in ('zone', 'agent'):
                 continue
