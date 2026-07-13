@@ -17,16 +17,30 @@ les positions observées. Architecture cible : docs/lsga-architecture-v3.md.
 En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
 (launch → suivi temps réel dans l'onglet Exécution → arrêt).
 
-### Stack complète (avec simulation)
+### Stack complète (avec simulation, conteneur Docker)
 
-1. **Simulation** : `lotusim run` (launcher upstream de LOTUSim) — lance gz ;
-   les nœuds ROS vivent dans les plugins gz, rien d'autre à démarrer.
-2. **Ce serveur** : `python3 app.py`, dans le même environnement ROS que gz
-   (les runtimes spawnés au launch sont rclpy).
-3. **Optionnel, la carte LOTUSim** : backend + frontend LOTUSim-UI.
+    # 0. Conteneur (une fois) : /lab monte les checkouts en live,
+    #    5050:5000 car AirPlay squatte le port 5000 sur macOS.
+    docker run -d --name tsm-e2e -p 8080:8080 -p 5050:5000 \
+      -v ~/src/lotusim-lab:/lab lotusim:jazzy sleep infinity
 
-Séquence détaillée sur le rig conteneurisé (commandes exactes, vérifications,
-teardown, pièges) : `docs/rig-e2e.md`.
+    # 1. Simulation : le launcher upstream lance gz, les nœuds ROS
+    #    vivent dans les plugins gz — rien d'autre à démarrer.
+    docker exec -d tsm-e2e bash -lc \
+      '/lotusim_ws/src/LOTUSim/launch/lotusim run > /tmp/gz.log 2>&1'
+
+    # 2. Ce serveur, dans le conteneur (les runtimes spawnés sont rclpy).
+    docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
+      source /lotusim_ws/install/setup.bash && cd /lab/tactical_scenario_maker && \
+      python3 -u app.py 8080 > /tmp/app.log 2>&1'
+    # vérif : curl -s localhost:8080/api/run → {"state": "idle", ...}
+
+Puis `http://localhost:8080` → scénario « escorte_ormuz », profil
+« kinematic-ormuz », Lancer. ⚠️ Le code Python du serveur est figé au
+démarrage : après un changement de checkout, relancer `app.py`.
+
+Optionnel (carte LOTUSim :5173), séquence détaillée, vérifications,
+teardown et pièges : `docs/rig-e2e.md`.
 
 ## Développement
 
