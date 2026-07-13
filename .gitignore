@@ -6,3 +6,4 @@ logs/*.jsonl
 logs/*.log
 .superpowers/
 logs/map.html
+logs/
