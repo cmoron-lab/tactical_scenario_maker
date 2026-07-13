@@ -12,7 +12,8 @@ from tsm.domain.scenario import (Scenario, ScenarioError, delete_scenario,
                                  list_scenarios, load_scenario, peek_version,
                                  save_scenario)
 from tsm.execution.actions import aller_a, creation_agent
-from tsm.execution.controller import required_capabilities_for_task, v3_mission_tasks
+from tsm.execution.controller import (required_capabilities_for_task,
+                                      v3_mission_tasks, validate_mission_referents)
 from tsm.planning.planner import Planner, build_state
 from tsm.web.runs import REPO_ROOT, RunManager
 
@@ -65,6 +66,7 @@ class Api:
             required = {agent: required_capabilities_for_task(kb, spec.mission.task)
                         for agent, spec in scenario.agents.items()}
             validate_profile(scenario, profile, required)
+            validate_mission_referents(scenario, kb)
         except (ScenarioError, ProfileError) as e:
             return {'ok': False, 'errors': [str(e)]}
         return {'ok': True, 'errors': []}
@@ -94,7 +96,8 @@ class Api:
         # refus propre (400) avant de lancer quoi que ce soit : schéma du
         # scénario ET cohérence version/profil (v2 exige un profil, v1 le refuse).
         if peek_version(name) == SCENARIO_V2_VERSION:
-            load_reference_scenario(name)
+            scenario = load_reference_scenario(name)
+            validate_mission_referents(scenario, doctrine.load())
             if profile is None:
                 raise ScenarioError(
                     f"le scénario {name!r} (v2) nécessite un profil d'exécution")

@@ -30,7 +30,7 @@ from typing import Any, Callable, Protocol
 
 from tsm.domain import doctrine
 from tsm.domain.profile import ExecutionProfile, ProfileError, validate_profile
-from tsm.domain.reference import ExecutionGraph, ReferenceScenario
+from tsm.domain.reference import ExecutionGraph, ReferenceScenario, ScenarioError
 from tsm.execution.actions import attack_target, follow_target, goto
 from tsm.execution.autonomy import AdjudicatedEngagementProvider, KinematicWaypointFollower
 from tsm.execution.objectives import (
@@ -111,6 +111,30 @@ def v3_mission_tasks(kb: Mapping[str, Any]) -> list[str]:
     names.update(t for t in kb.get('tasks', {})
                  if required_capabilities_for_task(kb, t))
     return sorted(names)
+
+
+def validate_mission_referents(scenario: ReferenceScenario, kb: Mapping[str, Any]) -> None:
+    """Cohérence des référents de mission (§4.5) : args[0] = l'agent lui-même,
+    chaque extra vérifié contre sa collection selon la signature déclarée
+    (kb['leaf_tasks'][task]['args'], kinds 'zone'/'agent'). Une mission vers un
+    référent inconnu rendrait l'agent inerte (goto_m → False à chaque tick)
+    jusqu'au timeout — refus explicite plutôt que dégradation silencieuse."""
+    leaf = kb.get('leaf_tasks', {})
+    for agent, spec in scenario.agents.items():
+        args = list(spec.mission.args)
+        if args[:1] != [agent]:
+            raise ScenarioError(
+                f"{agent}: mission.args[0] doit être l'agent lui-même ({args[:1]!r})")
+        kinds = list((leaf.get(spec.mission.task, {}).get('args') or ['agent']))[1:]
+        for i, kind in enumerate(kinds):
+            if kind not in ('zone', 'agent'):
+                continue
+            value = args[i + 1] if i + 1 < len(args) else ''
+            pool = scenario.zones if kind == 'zone' else scenario.agents
+            if value not in pool:
+                raise ScenarioError(
+                    f"{agent}: argument {i + 1} de la mission {spec.mission.task!r} "
+                    f"({kind}) invalide: {value!r}")
 
 
 class RunStartError(RuntimeError):

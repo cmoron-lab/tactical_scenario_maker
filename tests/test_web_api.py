@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tsm.domain.reference import ReferenceScenario
 from tsm.domain.scenario import ScenarioError
 from tsm.web.api import Api
 from tsm.web.runs import RunManager
@@ -255,3 +256,54 @@ def test_validate_scenario_reports_schema_errors(tmp_path):
     api = Api(run_manager=RunManager(logs_dir=tmp_path))
     result = api.validate_scenario({'version': 2}, 'kinematic-ormuz')
     assert result['ok'] is False and result['errors']
+
+
+# ── Amendements post-review Task 4 : référents de mission (§4.5) ─────────────
+
+def test_validate_scenario_reports_invalid_zone_referent_in_french(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_2']['mission']['args'] = ['vedette_2', '']
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+    assert any('vedette_2' in e and 'invalide' in e for e in result['errors'])
+
+
+def test_validate_scenario_reports_unknown_zone_referent(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_2']['mission']['args'] = ['vedette_2', 'zone_inconnue']
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+
+
+def test_validate_scenario_reports_self_referent_mismatch(tmp_path):
+    api = Api(run_manager=RunManager(logs_dir=tmp_path))
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_2']['mission']['args'] = ['autre_nom', 'repli_nord']
+    result = api.validate_scenario(doc, 'kinematic-ormuz')
+    assert result['ok'] is False
+
+
+def test_launch_v2_scenario_with_invalid_referent_rejected_before_spawn(tmp_path, monkeypatch):
+    # Un référent invalide fait un 400 AVANT le spawn du run — sinon
+    # timeout silencieux (goto_m → False à chaque tick, cf. controller.py).
+    doc = json.loads((Path('scenarios') / 'escorte_ormuz.json').read_text(encoding='utf-8'))
+    doc['agents']['vedette_2']['mission']['args'] = ['vedette_2', 'zone_inconnue']
+    broken = ReferenceScenario.from_dict(doc)
+
+    import tsm.web.api as api_mod
+    monkeypatch.setattr(api_mod, 'peek_version', lambda name: 2)
+    monkeypatch.setattr(api_mod, 'load_reference_scenario', lambda name: broken)
+
+    seen = {}
+
+    def cmd(name, profile=None):
+        seen['called'] = True
+        return [sys.executable, '-c', 'import time; time.sleep(2)']
+
+    rm = RunManager(cmd=cmd, logs_dir=tmp_path)
+    api = Api(run_manager=rm)
+    with pytest.raises(ScenarioError):
+        api.launch('escorte_ormuz', 'kinematic-ormuz')
+    assert 'called' not in seen
