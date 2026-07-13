@@ -2395,6 +2395,7 @@ function setV2CondField(loc, i, field, value) {
     delete c.agent; delete c.force;
     const [kind, name] = value.split(':');
     if (name) c[kind] = name;
+    else c.agent = '';                 // état incomplet visible par la validation
     return;
   }
   c[field] = value;
@@ -2451,7 +2452,7 @@ function renderV2Triggers() {
         <input value="${escHtml(t.id)}" onchange="v2doc.triggers[${i}].id = this.value.trim()"></div>
       ${buildV2ConditionForm('trigger', i)}
       <div class="field"><label>Action : déployer la force</label>
-        <select onchange="v2doc.triggers[${i}].do = [{type: 'spawn_force', force: this.value}]">
+        <select onchange="v2doc.triggers[${i}].do = this.value ? [{type: 'spawn_force', force: this.value}] : []">
           <option value="">—</option>
           ${Object.keys(v2doc.forces).map(f => `<option value="${f}" ${t.do?.[0]?.force === f ? 'selected' : ''}>${escHtml(f)}</option>`).join('')}
         </select></div>
