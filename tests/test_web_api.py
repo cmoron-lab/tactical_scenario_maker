@@ -143,6 +143,27 @@ def test_list_profiles_returns_available_profile_names(tmp_path):
         srv.shutdown()
 
 
+def test_get_profile_returns_document_and_404_on_unknown(tmp_path):
+    srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    conn = HTTPConnection('127.0.0.1', port)
+    try:
+        status, doc = _get(conn, '/api/profile/kinematic-ormuz')
+        assert status == 200 and doc['name'] == 'kinematic-ormuz'
+        assert doc['agents']['escorte']['spawn']['model'] == 'wamv'
+        assert ('engage.attack_target'
+                in doc['agents']['escorte']['providers']['adjudicated']['capabilities'])
+
+        status, _ = _get(conn, '/api/profile/inconnu')
+        assert status == 404
+
+        status, _ = _get(conn, '/api/profile/..%2Fetc')  # nom invalide → 404, pas de traversal
+        assert status == 404
+    finally:
+        srv.shutdown()
+
+
 def test_launch_v2_scenario_without_profile_is_400(tmp_path):
     srv = make_server(port=0, api=Api(run_manager=RunManager(logs_dir=tmp_path)))
     threading.Thread(target=srv.serve_forever, daemon=True).start()

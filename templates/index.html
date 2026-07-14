@@ -353,6 +353,26 @@ header {
 .scenario-actions select:focus { outline: none; border-color: var(--blue); }
 .scenario-actions .btn-launch { padding: 8px 18px; font-size: 13px; }
 
+/* Fiche profil (ⓘ) dépliée sous le bandeau sticky. */
+#profile-info { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
+.profile-info-intro { font-size: 12px; color: var(--text2); margin-bottom: 10px; max-width: 900px; }
+.profile-info-intro code { background: var(--navy-light); padding: 1px 5px; border-radius: 3px; }
+.profile-info-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.profile-info-table th {
+  text-align: left; color: var(--text2); font-weight: 600;
+  padding: 4px 12px 4px 0; border-bottom: 1px solid var(--border);
+}
+.profile-info-table td { padding: 5px 12px 5px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.profile-info-table tr:last-child td { border-bottom: none; }
+.profile-provider { color: var(--text3); }
+
+/* Mini-carte des zones (éditeur v2). */
+.v2-zones-map { height: 260px; border-bottom: 1px solid var(--border); }
+.v2-zones-map.pointing { cursor: crosshair; }
+.v2-zone-tip { font-size: 11px; }
+.v2-zone-actions { display: flex; gap: 8px; align-items: center; }
+.v2-point-btn.active { border-color: var(--blue); color: var(--blue); background: var(--navy-light); }
+
 .agent-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2110,9 +2130,11 @@ function renderEditorV2(name, isNew) {
         <div class="scenario-actions">
           <button class="btn btn-primary" onclick="saveScenarioV2()"
             title="Écrit le scénario dans scenarios/&lt;nom&gt;.json">Enregistrer</button>
-          <select id="profile-select" disabled
+          <select id="profile-select" disabled onchange="renderProfileInfo()"
             title="Profil d'exécution : plateformes et cinématiques utilisées par Vérifier et Lancer">
             <option value="">Chargement…</option></select>
+          <button class="btn btn-ghost" onclick="toggleProfileInfo()"
+            title="Détail du profil d'exécution sélectionné">ⓘ</button>
           <button class="btn btn-navy" onclick="validateScenarioV2()"
             title="Contrôle le scénario (références, missions, conditions) et sa compatibilité avec le profil sélectionné — sans le lancer">Vérifier</button>
           <button class="btn btn-launch" data-profiles="pending" disabled
@@ -2121,6 +2143,7 @@ function renderEditorV2(name, isNew) {
         </div>
       </div>
       <div id="launch-status"></div>
+      <div id="profile-info" style="display:none"></div>
     </div>
     <div id="v2-zones"></div>
     <div id="v2-forces"></div>
@@ -2129,6 +2152,7 @@ function renderEditorV2(name, isNew) {
     <div id="v2-triggers"></div>
     <div id="v2-end"></div>
   `;
+  profileInfoOpen = false;   // le panneau ⓘ vient d'être reconstruit masqué
   renderV2Zones();
   renderV2Forces();
   renderV2Relations();
@@ -2151,29 +2175,98 @@ function renderEditorV2(name, isNew) {
   updateLaunchButtonState();
 }
 
+// La carte Leaflet vit dans un conteneur stable (#v2-zones-map) : seules les
+// lignes de formulaire sont re-rendues, les cercles sont resynchronisés.
+let v2ZonesMap = null;
+let v2ZonesLayer = null;
+let v2ZonesMapFitted = false;
+let v2PointZone = null;   // zone en attente d'un clic carte pour placer son centre
+
 function renderV2Zones() {
+  const host = document.getElementById('v2-zones');
+  if (!host.querySelector('#v2-zones-rows')) {   // éditeur (re)construit
+    if (v2ZonesMap) { v2ZonesMap.remove(); v2ZonesMap = null; }
+    v2ZonesMapFitted = false;
+    v2PointZone = null;
+    host.innerHTML = `
+    <div class="agent-card">
+      <div class="agent-head"><span class="agent-name-display">Zones</span>
+        <button class="btn btn-ghost" onclick="addV2Zone()">+ Zone</button></div>
+      <div class="v2-zones-map" id="v2-zones-map"></div>
+      <div class="exec-card-body" id="v2-zones-rows"></div>
+    </div>`;
+  }
   const rows = Object.entries(v2doc.zones).map(([zname, z]) => `
     <div class="form-grid">
       <div class="field"><label>Nom</label>
         <input value="${escHtml(zname)}" onchange="renameV2Zone('${zname}', this.value)"></div>
       <div class="field"><label>Latitude</label>
         <input type="number" step="any" value="${z.center.lat}"
-          onchange="v2doc.zones['${zname}'].center.lat = parseFloat(this.value)"></div>
+          onchange="v2doc.zones['${zname}'].center.lat = parseFloat(this.value); renderV2Zones()"></div>
       <div class="field"><label>Longitude</label>
         <input type="number" step="any" value="${z.center.lon}"
-          onchange="v2doc.zones['${zname}'].center.lon = parseFloat(this.value)"></div>
+          onchange="v2doc.zones['${zname}'].center.lon = parseFloat(this.value); renderV2Zones()"></div>
       <div class="field"><label>Rayon (°)</label>
         <input type="number" step="any" value="${z.radius_deg}"
-          onchange="v2doc.zones['${zname}'].radius_deg = parseFloat(this.value)"></div>
+          onchange="v2doc.zones['${zname}'].radius_deg = parseFloat(this.value); renderV2Zones()"></div>
       <div class="field"><label>&nbsp;</label>
-        <button class="agent-remove" onclick="deleteV2Zone('${zname}')">Supprimer</button></div>
+        <div class="v2-zone-actions">
+          <button class="btn btn-ghost v2-point-btn ${v2PointZone === zname ? 'active' : ''}"
+            onclick="toggleV2PointZone('${zname}')"
+            title="Puis cliquer sur la carte pour placer le centre">📍 Pointer</button>
+          <button class="agent-remove" onclick="deleteV2Zone('${zname}')">Supprimer</button>
+        </div></div>
     </div>`).join('');
-  document.getElementById('v2-zones').innerHTML = `
-    <div class="agent-card">
-      <div class="agent-head"><span class="agent-name-display">Zones</span>
-        <button class="btn btn-ghost" onclick="addV2Zone()">+ Zone</button></div>
-      <div class="exec-card-body">${rows || '<p class="exec-empty">Aucune zone.</p>'}</div>
-    </div>`;
+  document.getElementById('v2-zones-rows').innerHTML =
+    rows || '<p class="exec-empty">Aucune zone.</p>';
+  updateV2ZonesMap();
+}
+
+const DEG_TO_M = 111320;  // 1° de latitude en mètres — rayons des cercles Leaflet
+
+function ensureV2ZonesMap() {
+  if (v2ZonesMap) return;
+  const container = document.getElementById('v2-zones-map');
+  if (!container) return;
+  v2ZonesMap = L.map(container).setView([26.5520, 56.4000], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22, maxNativeZoom: 19, attribution: '© OpenStreetMap',
+  }).addTo(v2ZonesMap);
+  v2ZonesLayer = L.layerGroup().addTo(v2ZonesMap);
+  v2ZonesMap.on('click', (e) => {
+    if (!v2PointZone || !v2doc.zones[v2PointZone]) return;
+    v2doc.zones[v2PointZone].center = { lat: +e.latlng.lat.toFixed(6),
+                                        lon: +e.latlng.lng.toFixed(6) };
+    v2PointZone = null;
+    renderV2Zones();
+  });
+  setTimeout(() => v2ZonesMap && v2ZonesMap.invalidateSize(), 0);
+}
+
+function updateV2ZonesMap() {
+  ensureV2ZonesMap();
+  if (!v2ZonesMap) return;
+  v2ZonesLayer.clearLayers();
+  const pts = [];
+  for (const [zname, z] of Object.entries(v2doc.zones)) {
+    const lat = z.center?.lat, lon = z.center?.lon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;  // ligne en cours de saisie
+    pts.push([lat, lon]);
+    L.circle([lat, lon], { radius: (z.radius_deg || 0) * DEG_TO_M, color: '#0057B8',
+                           weight: 1.5, fillOpacity: 0.12 })
+      .bindTooltip(escHtml(zname), { permanent: true, direction: 'top', className: 'v2-zone-tip' })
+      .addTo(v2ZonesLayer);
+  }
+  if (pts.length && !v2ZonesMapFitted) {
+    v2ZonesMap.fitBounds(L.latLngBounds(pts).pad(0.4), { maxZoom: 15 });
+    v2ZonesMapFitted = true;
+  }
+  document.getElementById('v2-zones-map').classList.toggle('pointing', !!v2PointZone);
+}
+
+function toggleV2PointZone(name) {
+  v2PointZone = v2PointZone === name ? null : name;
+  renderV2Zones();
 }
 
 function addV2Zone() {
@@ -2195,6 +2288,53 @@ function renameV2Zone(oldName, newName) {
 function deleteV2Zone(name) {
   delete v2doc.zones[name];
   renderV2Zones();
+}
+
+// ── Fiche du profil d'exécution (lecture seule, bouton ⓘ du bandeau) ─────────
+let profileInfoOpen = false;
+
+function toggleProfileInfo() {
+  profileInfoOpen = !profileInfoOpen;
+  renderProfileInfo();
+}
+
+function renderProfileInfo() {
+  const el = document.getElementById('profile-info');
+  if (!el) return;
+  const name = document.getElementById('profile-select')?.value;
+  if (!profileInfoOpen || !name) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  fetch(`/api/profile/${encodeURIComponent(name)}`).then(r => r.json()).then(p => {
+    if (!profileInfoOpen) return;
+    el.innerHTML = p.error ? `<p class="profile-info-intro">${escHtml(p.error)}</p>`
+                           : buildProfileInfo(p);
+  });
+}
+
+function buildProfileInfo(p) {
+  const rows = Object.entries(p.agents).map(([aname, a]) => {
+    const caps = Object.entries(a.providers).map(([pname, cfg]) => {
+      const extras = Object.entries(cfg).filter(([k]) => k !== 'capabilities')
+        .map(([k, v]) => `${k}=${v}`).join(', ');
+      return `${escHtml((cfg.capabilities || []).join(', '))}
+        <span class="profile-provider">(${escHtml(pname)}${extras ? ' — ' + escHtml(extras) : ''})</span>`;
+    }).join('<br>');
+    const v = a.spawn.linear_velocity;
+    return `<tr><td>${escHtml(aname)}</td><td>${escHtml(a.fidelity)}</td><td>${caps}</td>
+      <td>${escHtml(a.spawn.model)}</td><td>${v[0]}–${v[1]} m/s</td>
+      <td>${a.spawn.angular_velocity_max} rad/s</td></tr>`;
+  }).join('');
+  return `
+    <p class="profile-info-intro">Le profil d'exécution incarne physiquement les agents :
+    le scénario décrit le <em>quoi</em> tactique, le profil le <em>comment</em> simulé
+    (modèle, cinématique, fournisseur de chaque capacité — « adjudicated » = arbitré par
+    la cellule blanche, pas simulé). Fichier <code>profiles/${escHtml(p.name)}.json</code>,
+    non éditable depuis l'IHM.</p>
+    <table class="profile-info-table">
+      <thead><tr><th>Agent</th><th>Fidélité</th><th>Capacités (provider)</th>
+        <th>Modèle</th><th>Vitesse</th><th>Virage max</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function showV2Status(msg, isError) {

@@ -31,6 +31,18 @@ class Api:
     def profiles(self) -> list[str]:
         return list_profiles()
 
+    def get_profile(self, name: str) -> dict[str, Any]:
+        """Contenu d'un profil pour affichage — load_profile valide nom et schéma."""
+        try:
+            profile = load_profile(name)
+        except ProfileError as e:
+            raise ScenarioError(str(e)) from e  # → 404 en GET
+        return {'name': profile.name,
+                'agents': {agent: {'fidelity': spec.fidelity,
+                                   'providers': spec.providers,
+                                   'spawn': spec.spawn}
+                           for agent, spec in profile.agents.items()}}
+
     def get_kb(self) -> dict[str, Any]:
         kb = doctrine.load()
         kb['v3_tasks'] = v3_mission_tasks(kb)

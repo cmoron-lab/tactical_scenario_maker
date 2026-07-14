@@ -32,6 +32,8 @@ def _route(method: str, path: str):
             return 'run_poses', {}
         if parts == ['api', 'profiles']:
             return 'list_profiles', {}
+        if len(parts) == 3 and parts[:2] == ['api', 'profile']:
+            return 'get_profile', {'name': parts[2]}
         if len(parts) == 3 and parts[:2] == ['api', 'scenario']:
             return 'get_scenario', {'name': parts[2]}
         if len(parts) == 4 and parts[:2] == ['api', 'scenario'] and parts[3] == 'plan':
@@ -105,6 +107,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(self.api.scenarios())
             elif action == 'list_profiles':
                 self._send_json(self.api.profiles())
+            elif action == 'get_profile':
+                self._send_json(self.api.get_profile(params['name']))
             elif action == 'get_kb':
                 self._send_json(self.api.get_kb())
             elif action == 'save_kb':
