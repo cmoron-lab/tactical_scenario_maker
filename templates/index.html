@@ -1131,14 +1131,15 @@ header {
 .exec-footer-link a { color: var(--text3); text-decoration: none; }
 .exec-footer-link a:hover { color: var(--blue); }
 
-/* La colonne gauche tient dans le viewport : Contrôle garde sa hauteur,
-   Événements prend le reste et scrolle en interne — les derniers événements
-   restent visibles même quand Contrôle grossit (run en cours). */
+/* La colonne gauche tient dans le viewport : Contrôle est insécable (jamais
+   compressé), Événements prend le reste et scrolle en interne — timeline
+   inversée (derniers événements en haut), donc toujours visibles. */
 .exec-col-left {
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 56px - 41px - 2 * 28px);
 }
+.exec-col-left > .exec-card:not(.exec-card-events) { flex-shrink: 0; }
 .exec-card-events {
   display: flex;
   flex-direction: column;
@@ -1774,13 +1775,8 @@ function buildEventRow(evt) {
     </div>`;
 }
 
-// Auto-suit le bas SAUF si l'utilisateur a remonté manuellement — se réactive
-// dès qu'il redescend en bas (seuil de tolérance 24px).
-let eventsStickBottom = true;
-document.getElementById('exec-events').addEventListener('scroll', function() {
-  eventsStickBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 24;
-});
-
+// Timeline inversée : derniers événements en haut, toujours visibles sans
+// gestion de scroll (le lecteur descend pour remonter dans l'historique).
 function renderExecEvents() {
   const el = document.getElementById('exec-events');
   if (!el) return;
@@ -1788,8 +1784,7 @@ function renderExecEvents() {
     el.innerHTML = '<div class="exec-events-empty">Les événements du run apparaîtront ici.</div>';
     return;
   }
-  el.innerHTML = runEvents.map(buildEventRow).join('');
-  if (eventsStickBottom) el.scrollTop = el.scrollHeight;
+  el.innerHTML = runEvents.map(buildEventRow).reverse().join('');
 }
 
 // ── Mini-carte live (Leaflet) ────────────────────────────────────────────────
