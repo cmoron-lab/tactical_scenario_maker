@@ -26,8 +26,13 @@ En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
 
     # 1. Simulation : le launcher upstream lance gz, les nœuds ROS
     #    vivent dans les plugins gz — rien d'autre à démarrer.
-    #    hormuz.world ancre la scène dans le vrai détroit (scénario de
-    #    référence) ; sans argument : lotusim.world (Singapour, scénarios v1).
+    #    hormuz.world ancre la scène dans le vrai détroit (scénarios de
+    #    référence). ⚠️ Non commité dans LOTUSim et le launcher lit
+    #    /lotusim_ws (pas /lab) : à recopier À CHAQUE recréation du
+    #    conteneur, sinon gz meurt sur « Unable to find file » et le
+    #    préflight tsm refuse (« aucune observation du monde reçue »).
+    docker exec tsm-e2e bash -c 'cp /lab/LOTUSim/assets/worlds/hormuz.world \
+      /lotusim_ws/src/LOTUSim/assets/worlds/'
     docker exec -d tsm-e2e bash -lc \
       '/lotusim_ws/src/LOTUSim/launch/lotusim run hormuz.world > /tmp/gz.log 2>&1'
 
