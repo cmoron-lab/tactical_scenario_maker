@@ -268,7 +268,9 @@ header {
 .btn-ghost:hover { background: var(--bg); color: var(--text); border-color: var(--border-hi); }
 
 /* ── Editor (scenario) ───────────────────────────────────────────────── */
-.editor { padding: 28px 32px; overflow-y: auto; }
+/* Pas d'overflow ici : c'est la page qui scrolle, et un overflow-y ferait
+   de .editor le conteneur de référence du bandeau sticky (qui ne collerait plus). */
+.editor { padding: 28px 32px; }
 
 .editor-empty {
   display: flex;
@@ -317,6 +319,39 @@ header {
   color: var(--blue);
   letter-spacing: 0.2px;
 }
+
+/* Bandeau sticky de l'éditeur v2 : nom + actions (Enregistrer / Vérifier /
+   Lancer) et statuts restent visibles à tout moment du scroll. Les marges
+   négatives compensent le padding 28/32 de .editor pour couvrir les gouttières. */
+.editor-sticky {
+  position: sticky;
+  top: calc(56px + 41px);
+  z-index: 50;
+  background: var(--bg);
+  margin: -28px -32px 24px;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.editor-sticky .scenario-bar { margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex-wrap: wrap; }
+
+.scenario-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.scenario-actions select {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 5px;
+}
+.scenario-actions select:focus { outline: none; border-color: var(--blue); }
+.scenario-actions .btn-launch { padding: 8px 18px; font-size: 13px; }
 
 .agent-card {
   background: var(--surface);
@@ -2067,10 +2102,25 @@ function conditionRows(label, conditions) {
 // ── Éditeur v2 (Scenario Request) ────────────────────────────────────────────
 function renderEditorV2(name, isNew) {
   document.getElementById('editor').innerHTML = `
-    <div class="scenario-bar">
-      <input class="sc-name-input" id="sc-name-inp" value="${escHtml(name)}"
-        placeholder="Nom du scénario" ${isNew ? '' : 'readonly'}>
-      <span class="sc-file-pill">v2</span>
+    <div class="editor-sticky">
+      <div class="scenario-bar">
+        <input class="sc-name-input" id="sc-name-inp" value="${escHtml(name)}"
+          placeholder="Nom du scénario" ${isNew ? '' : 'readonly'}>
+        <span class="sc-file-pill">v2</span>
+        <div class="scenario-actions">
+          <button class="btn btn-primary" onclick="saveScenarioV2()"
+            title="Écrit le scénario dans scenarios/&lt;nom&gt;.json">Enregistrer</button>
+          <select id="profile-select" disabled
+            title="Profil d'exécution : plateformes et cinématiques utilisées par Vérifier et Lancer">
+            <option value="">Chargement…</option></select>
+          <button class="btn btn-navy" onclick="validateScenarioV2()"
+            title="Contrôle le scénario (références, missions, conditions) et sa compatibilité avec le profil sélectionné — sans le lancer">Vérifier</button>
+          <button class="btn btn-launch" data-profiles="pending" disabled
+            title="Lance le run sur LOTUSim avec le profil sélectionné"
+            onclick="launchScenarioV2(document.getElementById('sc-name-inp').value.trim())">▶ Lancer</button>
+        </div>
+      </div>
+      <div id="launch-status"></div>
     </div>
     <div id="v2-zones"></div>
     <div id="v2-forces"></div>
@@ -2078,22 +2128,6 @@ function renderEditorV2(name, isNew) {
     <div id="v2-agents"></div>
     <div id="v2-triggers"></div>
     <div id="v2-end"></div>
-    <div class="action-bar">
-      <button class="btn btn-primary" onclick="saveScenarioV2()">Enregistrer</button>
-      <button class="btn btn-navy" onclick="validateScenarioV2()">Valider (profil)</button>
-    </div>
-    <div class="agent-card">
-      <div class="agent-head"><span class="agent-name-display">Lancement</span></div>
-      <div class="exec-card-body">
-        <div class="field">
-          <label>Profil d'exécution</label>
-          <select id="profile-select" disabled><option value="">Chargement…</option></select>
-        </div>
-        <button class="btn btn-launch" data-profiles="pending" disabled style="margin-top:14px"
-          onclick="launchScenarioV2(document.getElementById('sc-name-inp').value.trim())">▶ Lancer sur Lotusim</button>
-      </div>
-    </div>
-    <div id="launch-status"></div>
   `;
   renderV2Zones();
   renderV2Forces();
