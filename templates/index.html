@@ -366,12 +366,29 @@ header {
 .profile-info-table tr:last-child td { border-bottom: none; }
 .profile-provider { color: var(--text3); }
 
-/* Mini-carte des zones (éditeur v2). */
-.v2-zones-map { height: 260px; border-bottom: 1px solid var(--border); }
-.v2-zones-map.pointing { cursor: crosshair; }
+/* Zones (éditeur v2) : champs en colonne + mini-carte par zone à droite.
+   z-index: 0 confine les panes Leaflet (z 200-700) dans la carte, sinon
+   elles passeraient devant le bandeau sticky. */
+.v2-zone-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) 1fr;
+  gap: 14px 28px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.v2-zone-row:last-child { border-bottom: none; }
+.v2-zone-fields { display: flex; flex-direction: column; gap: 12px; }
+.v2-zone-fields .agent-remove { align-self: flex-start; margin-top: 4px; }
+.v2-zone-map {
+  height: 260px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+  z-index: 0;
+}
+.v2-zone-map-hint { font-size: 11.5px; color: var(--text3); margin-top: 6px; }
 .v2-zone-tip { font-size: 11px; }
-.v2-zone-actions { display: flex; gap: 8px; align-items: center; }
-.v2-point-btn.active { border-color: var(--blue); color: var(--blue); background: var(--navy-light); }
+@media (max-width: 1000px) { .v2-zone-row { grid-template-columns: 1fr; } }
 
 .agent-card {
   background: var(--surface);
@@ -2175,98 +2192,102 @@ function renderEditorV2(name, isNew) {
   updateLaunchButtonState();
 }
 
-// La carte Leaflet vit dans un conteneur stable (#v2-zones-map) : seules les
-// lignes de formulaire sont re-rendues, les cercles sont resynchronisés.
-let v2ZonesMap = null;
-let v2ZonesLayer = null;
-let v2ZonesMapFitted = false;
-let v2PointZone = null;   // zone en attente d'un clic carte pour placer son centre
+// Une mini-carte Leaflet PAR zone : champs en colonne à gauche, carte à droite
+// (zone courante en rouge, les autres en gris). Un appui long sur la carte
+// positionne le centre lat/lon — pas de bouton. Le re-render complet détruit
+// et recrée les cartes ; l'édition lat/lon/rayon ne fait que les redessiner.
+let v2ZoneMaps = {};   // zname → { map, layer }
 
 function renderV2Zones() {
-  const host = document.getElementById('v2-zones');
-  if (!host.querySelector('#v2-zones-rows')) {   // éditeur (re)construit
-    if (v2ZonesMap) { v2ZonesMap.remove(); v2ZonesMap = null; }
-    v2ZonesMapFitted = false;
-    v2PointZone = null;
-    host.innerHTML = `
+  for (const { map } of Object.values(v2ZoneMaps)) map.remove();
+  v2ZoneMaps = {};
+  const rows = Object.entries(v2doc.zones).map(([zname, z]) => `
+    <div class="v2-zone-row">
+      <div class="v2-zone-fields">
+        <div class="field"><label>Nom</label>
+          <input value="${escHtml(zname)}" onchange="renameV2Zone('${zname}', this.value)"></div>
+        <div class="field"><label>Latitude</label>
+          <input type="number" step="any" value="${z.center.lat}"
+            onchange="v2doc.zones['${zname}'].center.lat = parseFloat(this.value); syncV2ZoneMaps('${zname}')"></div>
+        <div class="field"><label>Longitude</label>
+          <input type="number" step="any" value="${z.center.lon}"
+            onchange="v2doc.zones['${zname}'].center.lon = parseFloat(this.value); syncV2ZoneMaps('${zname}')"></div>
+        <div class="field"><label>Rayon (°)</label>
+          <input type="number" step="any" value="${z.radius_deg}"
+            onchange="v2doc.zones['${zname}'].radius_deg = parseFloat(this.value); syncV2ZoneMaps('${zname}')"></div>
+        <button class="agent-remove" onclick="deleteV2Zone('${zname}')">Supprimer</button>
+      </div>
+      <div class="v2-zone-mapcol">
+        <div class="v2-zone-map" id="v2-zone-map-${zname}"></div>
+        <p class="v2-zone-map-hint">Appui long sur la carte pour positionner la zone (latitude/longitude)</p>
+      </div>
+    </div>`).join('');
+  document.getElementById('v2-zones').innerHTML = `
     <div class="agent-card">
       <div class="agent-head"><span class="agent-name-display">Zones</span>
         <button class="btn btn-ghost" onclick="addV2Zone()">+ Zone</button></div>
-      <div class="v2-zones-map" id="v2-zones-map"></div>
-      <div class="exec-card-body" id="v2-zones-rows"></div>
+      ${rows || '<div class="exec-card-body"><p class="exec-empty">Aucune zone.</p></div>'}
     </div>`;
-  }
-  const rows = Object.entries(v2doc.zones).map(([zname, z]) => `
-    <div class="form-grid">
-      <div class="field"><label>Nom</label>
-        <input value="${escHtml(zname)}" onchange="renameV2Zone('${zname}', this.value)"></div>
-      <div class="field"><label>Latitude</label>
-        <input type="number" step="any" value="${z.center.lat}"
-          onchange="v2doc.zones['${zname}'].center.lat = parseFloat(this.value); renderV2Zones()"></div>
-      <div class="field"><label>Longitude</label>
-        <input type="number" step="any" value="${z.center.lon}"
-          onchange="v2doc.zones['${zname}'].center.lon = parseFloat(this.value); renderV2Zones()"></div>
-      <div class="field"><label>Rayon (°)</label>
-        <input type="number" step="any" value="${z.radius_deg}"
-          onchange="v2doc.zones['${zname}'].radius_deg = parseFloat(this.value); renderV2Zones()"></div>
-      <div class="field"><label>&nbsp;</label>
-        <div class="v2-zone-actions">
-          <button class="btn btn-ghost v2-point-btn ${v2PointZone === zname ? 'active' : ''}"
-            onclick="toggleV2PointZone('${zname}')"
-            title="Puis cliquer sur la carte pour placer le centre">📍 Pointer</button>
-          <button class="agent-remove" onclick="deleteV2Zone('${zname}')">Supprimer</button>
-        </div></div>
-    </div>`).join('');
-  document.getElementById('v2-zones-rows').innerHTML =
-    rows || '<p class="exec-empty">Aucune zone.</p>';
-  updateV2ZonesMap();
+  for (const zname of Object.keys(v2doc.zones)) initV2ZoneMap(zname);
 }
 
 const DEG_TO_M = 111320;  // 1° de latitude en mètres — rayons des cercles Leaflet
+const LONG_PRESS_MS = 500;
 
-function ensureV2ZonesMap() {
-  if (v2ZonesMap) return;
-  const container = document.getElementById('v2-zones-map');
+function initV2ZoneMap(zname) {
+  const container = document.getElementById(`v2-zone-map-${zname}`);
   if (!container) return;
-  v2ZonesMap = L.map(container).setView([26.5520, 56.4000], 13);
+  // scrollWheelZoom coupé : la molette sur une mini-carte doit scroller la page.
+  // Vue initiale obligatoire avant d'ajouter des couches (drawV2ZoneMap recadre ensuite).
+  const map = L.map(container, { scrollWheelZoom: false }).setView([26.5520, 56.4000], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 22, maxNativeZoom: 19, attribution: '© OpenStreetMap',
-  }).addTo(v2ZonesMap);
-  v2ZonesLayer = L.layerGroup().addTo(v2ZonesMap);
-  v2ZonesMap.on('click', (e) => {
-    if (!v2PointZone || !v2doc.zones[v2PointZone]) return;
-    v2doc.zones[v2PointZone].center = { lat: +e.latlng.lat.toFixed(6),
-                                        lon: +e.latlng.lng.toFixed(6) };
-    v2PointZone = null;
-    renderV2Zones();
+  }).addTo(map);
+  const layer = L.layerGroup().addTo(map);
+  v2ZoneMaps[zname] = { map, layer };
+
+  let pressTimer = null;
+  map.on('mousedown', (e) => {
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      const z = v2doc.zones[zname];
+      if (!z) return;
+      z.center = { lat: +e.latlng.lat.toFixed(6), lon: +e.latlng.lng.toFixed(6) };
+      renderV2Zones();   // resynchronise formulaire + toutes les cartes
+    }, LONG_PRESS_MS);
   });
-  setTimeout(() => v2ZonesMap && v2ZonesMap.invalidateSize(), 0);
+  const cancelPress = () => clearTimeout(pressTimer);
+  map.on('mouseup dragstart zoomstart mouseout', cancelPress);
+
+  drawV2ZoneMap(zname, true);
+  setTimeout(() => map.invalidateSize(), 0);
 }
 
-function updateV2ZonesMap() {
-  ensureV2ZonesMap();
-  if (!v2ZonesMap) return;
-  v2ZonesLayer.clearLayers();
-  const pts = [];
-  for (const [zname, z] of Object.entries(v2doc.zones)) {
-    const lat = z.center?.lat, lon = z.center?.lon;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;  // ligne en cours de saisie
-    pts.push([lat, lon]);
-    L.circle([lat, lon], { radius: (z.radius_deg || 0) * DEG_TO_M, color: '#0057B8',
-                           weight: 1.5, fillOpacity: 0.12 })
-      .bindTooltip(escHtml(zname), { permanent: true, direction: 'top', className: 'v2-zone-tip' })
-      .addTo(v2ZonesLayer);
+function drawV2ZoneMap(zname, fit) {
+  const entry = v2ZoneMaps[zname];
+  const z = v2doc.zones[zname];
+  if (!entry || !z) return;
+  entry.layer.clearLayers();
+  for (const [other, oz] of Object.entries(v2doc.zones)) {   // les autres, en gris
+    if (other === zname) continue;
+    if (!Number.isFinite(oz.center?.lat) || !Number.isFinite(oz.center?.lon)) continue;
+    L.circle([oz.center.lat, oz.center.lon],
+             { radius: (oz.radius_deg || 0) * DEG_TO_M, color: '#9DB2C8',
+               weight: 1, fillOpacity: 0.08 })
+      .bindTooltip(escHtml(other), { direction: 'top', className: 'v2-zone-tip' })
+      .addTo(entry.layer);
   }
-  if (pts.length && !v2ZonesMapFitted) {
-    v2ZonesMap.fitBounds(L.latLngBounds(pts).pad(0.4), { maxZoom: 15 });
-    v2ZonesMapFitted = true;
-  }
-  document.getElementById('v2-zones-map').classList.toggle('pointing', !!v2PointZone);
+  if (!Number.isFinite(z.center?.lat) || !Number.isFinite(z.center?.lon)) return;
+  const own = L.circle([z.center.lat, z.center.lon],
+                       { radius: (z.radius_deg || 0) * DEG_TO_M, color: '#C8002A',
+                         weight: 2, fillOpacity: 0.15 }).addTo(entry.layer);
+  if (fit) entry.map.fitBounds(own.getBounds().pad(4), { maxZoom: 17 });
 }
 
-function toggleV2PointZone(name) {
-  v2PointZone = v2PointZone === name ? null : name;
-  renderV2Zones();
+// Après édition d'un champ : redessine toutes les cartes (la zone modifiée
+// apparaît en gris chez les autres), ne recadre que la sienne.
+function syncV2ZoneMaps(changed) {
+  for (const zname of Object.keys(v2ZoneMaps)) drawV2ZoneMap(zname, zname === changed);
 }
 
 function addV2Zone() {
