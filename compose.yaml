@@ -1,0 +1,23 @@
+# Rig e2e — conteneur unique : gz, le serveur tsm et le backend UI partagent
+# le graphe ROS/DDS (les séparer en services casserait FastDDS sur Docker macOS).
+# Le frontend reste sur le Mac : cd ../LOTUSim-UI-frontend && bun run dev
+#
+#   docker compose up -d --build     # monte tout le rig
+#   docker compose down              # teardown
+services:
+  rig:
+    build: ./docker
+    image: tsm-rig
+    container_name: tsm-e2e
+    init: true
+    ports:
+      - "8080:8080" # serveur tsm
+      - "5050:5000" # backend UI (5000 hardcodé, et AirPlay squatte 5000 sur macOS)
+    volumes:
+      - ..:/lab # les checkouts du Mac, vus en live par le conteneur
+    environment:
+      WORLD: ${WORLD:-hormuz.world}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "localhost:8080/api/run"]
+      interval: 30s
+      start_period: 60s

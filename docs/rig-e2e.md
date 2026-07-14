@@ -27,41 +27,32 @@ WaypointFollower, RenderPlugin) qui créent les nœuds ROS — le publisher de
 
 ## Séquence
 
+Les étapes conteneur sont encodées dans `compose.yaml` + `docker/`
+(image dérivée de lotusim:jazzy avec node préinstallé ; l'entrypoint
+copie hormuz.world vers /lotusim_ws puis lance gz, app.py et le backend —
+mêmes logs /tmp/*.log qu'avant).
+
 ```bash
-# 0. Conteneur inerte, lab monté, ports publiés.
-#    5050:5000 : le backend écoute sur 5000 hardcodé, et AirPlay squatte 5000 sur macOS.
-#    /lab : les checkouts du Mac, vus en live par le conteneur.
-docker run -d --name tsm-e2e -p 8080:8080 -p 5050:5000 \
-  -v ~/src/lotusim-lab:/lab lotusim:jazzy sleep infinity
-
-# 1. La simulation — le launcher upstream fait tout (env gz + monde + plugins).
+# 1. Tout le conteneur (ports 8080 et 5050:5000, /lab monté en live).
 #    FASTDDS_BUILTIN_TRANSPORTS=UDPv4 est déjà un ENV de l'image.
-# hormuz.world pour le scénario de référence (vrai détroit) ; sans argument :
-# lotusim.world (Singapour, scénarios v1). Changer de monde = relancer gz.
-docker exec -d tsm-e2e bash -lc '/lotusim_ws/src/LOTUSim/launch/lotusim run hormuz.world > /tmp/gz.log 2>&1'
-# vérif : docker exec tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic list'
-#         → /lotusim/poses et consorts
+#    WORLD=lotusim.world pour la scène v1 (Singapour) ; défaut : hormuz.world
+#    (vrai détroit, scénarios de référence). Changer de monde = recréer.
+docker compose up -d --build
+# vérifs : docker ps → tsm-e2e (healthy)  [healthcheck = curl :8080/api/run]
+#          curl -s localhost:8080/api/run → {"state": "idle", ...}
+#          curl -s localhost:5050/instances → ["lotusim"]
+#          docker exec tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic list'
+#          → /lotusim/poses et consorts
 
-# 2. Serveur tsm. Lui-même est stdlib pur, mais il vit dans le conteneur parce que les
-#    runtimes qu'il spawne au launch (main.py <scenario>) sont rclpy et doivent partager
-#    le graphe ROS de gz.
-docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
-  source /lotusim_ws/install/setup.bash && cd /lab/tactical_scenario_maker && \
-  python3 -u app.py 8080 > /tmp/app.log 2>&1'
-# vérif : curl -s localhost:8080/api/run → {"state": "idle", ...}
-
-# 3. Backend UI. node n'est PAS dans l'image (à réinstaller à chaque recréation de
-#    conteneur — les node_modules, eux, survivent sur /lab). Lancer depuis /lab
-#    (clone patché multi-clients), PAS depuis la copie de l'image.
-docker exec tsm-e2e bash -c 'apt-get update -qq && apt-get install -y -qq nodejs npm'
-docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
-  source /lotusim_ws/install/setup.bash && cd /lab/LOTUSim-UI-backend && \
-  npx ts-node src/main.ts > /tmp/backend.log 2>&1'
-# vérif : curl -s localhost:5050/instances → ["lotusim"]
-
-# 4. Frontend, sur le Mac — seul étage sans ROS, il ne parle que REST/WS sur :5050.
+# 2. Frontend, sur le Mac — seul étage sans ROS, il ne parle que REST/WS sur :5050.
 cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev
 ```
+
+Pourquoi un seul service : gz, le serveur tsm et le backend partagent le
+graphe ROS/DDS — les séparer en conteneurs casserait FastDDS sur Docker
+macOS. Compose n'orchestre que le cycle de vie du conteneur ; si un
+processus meurt, le conteneur reste debout pour le diagnostic
+(`docker exec tsm-e2e tail /tmp/gz.log` etc.).
 
 IHM : `http://localhost:5173` (console d'opérations) · `http://localhost:8080` (tsm).
 
@@ -108,7 +99,7 @@ docker exec tsm-e2e bash -lc "cat /lab/tactical_scenario_maker/logs/$RUN/report.
 ## Teardown
 
 ```bash
-docker rm -f tsm-e2e && pkill -f "[b]un.*vite"
+docker compose down && pkill -f "[b]un.*vite"
 # si :5173 répond encore : un enfant `node .../vite` survit à bun — lsof -nP -iTCP:5173, kill
 ```
 

@@ -19,44 +19,19 @@ En pratique on ne lance jamais `main.py` à la main : l'UI le fait au clic
 
 ### Stack complète (avec simulation, conteneur Docker)
 
-    # 0. Conteneur (une fois) : /lab monte les checkouts en live,
-    #    5050:5000 car AirPlay squatte le port 5000 sur macOS.
-    docker run -d --name tsm-e2e -p 8080:8080 -p 5050:5000 \
-      -v ~/src/lotusim-lab:/lab lotusim:jazzy sleep infinity
-
-    # 1. Simulation : le launcher upstream lance gz, les nœuds ROS
-    #    vivent dans les plugins gz — rien d'autre à démarrer.
-    #    hormuz.world ancre la scène dans le vrai détroit (scénarios de
-    #    référence). ⚠️ Non commité dans LOTUSim et le launcher lit
-    #    /lotusim_ws (pas /lab) : à recopier À CHAQUE recréation du
-    #    conteneur, sinon gz meurt sur « Unable to find file » et le
-    #    préflight tsm refuse (« aucune observation du monde reçue »).
-    docker exec tsm-e2e bash -c 'cp /lab/LOTUSim/assets/worlds/hormuz.world \
-      /lotusim_ws/src/LOTUSim/assets/worlds/'
-    docker exec -d tsm-e2e bash -lc \
-      '/lotusim_ws/src/LOTUSim/launch/lotusim run hormuz.world > /tmp/gz.log 2>&1'
-
-    # 2. Ce serveur, dans le conteneur (les runtimes spawnés sont rclpy).
-    docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
-      source /lotusim_ws/install/setup.bash && cd /lab/tactical_scenario_maker && \
-      python3 -u app.py 8080 > /tmp/app.log 2>&1'
+    # Tout le conteneur (gz + ce serveur + backend UI) en une commande.
+    # Prérequis : image lotusim:jazzy construite depuis le checkout LOTUSim.
+    docker compose up -d --build
     # vérif : curl -s localhost:8080/api/run → {"state": "idle", ...}
+    #         curl -s localhost:5050/instances → ["lotusim"]
+
+    # Frontend, sur le Mac (REST/WS :5050 uniquement, pas de ROS) :
+    cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev   # → :5173
 
 Puis `http://localhost:8080` → scénario « escorte_ormuz », profil
 « kinematic-ormuz », Lancer. ⚠️ Le code Python du serveur est figé au
-démarrage : après un changement de checkout, relancer `app.py`.
-
-    # 3. Optionnel — carte LOTUSim (:5173). Backend dans le conteneur
-    #    (node à réinstaller à chaque recréation ; lancer depuis /lab,
-    #    clone patché multi-clients, pas la copie de l'image) :
-    docker exec tsm-e2e bash -c 'apt-get update -qq && apt-get install -y -qq nodejs npm'
-    docker exec -d tsm-e2e bash -lc 'source /opt/ros/jazzy/setup.bash && \
-      source /lotusim_ws/install/setup.bash && cd /lab/LOTUSim-UI-backend && \
-      npx ts-node src/main.ts > /tmp/backend.log 2>&1'
-    # vérif : curl -s localhost:5050/instances → ["lotusim"]
-
-    # 4. Frontend, sur le Mac (REST/WS :5050 uniquement, pas de ROS) :
-    cd ~/src/lotusim-lab/LOTUSim-UI-frontend && bun run dev   # → :5173
+démarrage : après un changement de checkout, relancer `app.py`
+(`docker compose restart` relance tout le conteneur).
 
 Suivre un run sur la carte LOTUSim : `http://localhost:5173` (ou le lien
 « Ouvrir l'IHM LOTUSim » de l'onglet Exécution) — flotte en direct,
@@ -82,6 +57,7 @@ Séquence détaillée, vérifications, teardown et pièges : `docs/rig-e2e.md`.
 | tsm/web/ | API HTTP locale | Éditeur tactique (provisoire) |
 | scenarios/ | scénarios JSON v2 — Scenario Request (l'identité = le nom de fichier) |  |
 | doctrine/ | knowledge_base.json — la doctrine HTN |  |
+| docker/ | image et entrypoint du rig e2e (voir compose.yaml, docs/rig-e2e.md) |  |
 | attic/ | générateur IA parqué (voir attic/README.md) |  |
 
 ## Format de scénario (v2 — Scenario Request)
