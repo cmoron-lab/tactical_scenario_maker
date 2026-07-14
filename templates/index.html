@@ -162,7 +162,7 @@ header {
   border-radius: 6px;
   margin-bottom: 2px;
   border: 1px solid transparent;
-  cursor: default;
+  cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
 .sc-item:hover { background: var(--navy-light); }
@@ -336,6 +336,21 @@ header {
 }
 
 .agent-name-display { flex: 1; font-size: 15px; font-weight: 600; color: #fff; letter-spacing: 0.2px; }
+
+/* Édition du nom dans l'en-tête navy (agents v2). */
+.agent-head input {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  width: min(260px, 100%);
+}
+.agent-head input:focus { outline: none; border-color: #fff; background: rgba(255,255,255,0.16); }
 
 .agent-type-chip {
   font-size: 11px;
@@ -1116,7 +1131,23 @@ header {
 .exec-footer-link a { color: var(--text3); text-decoration: none; }
 .exec-footer-link a:hover { color: var(--blue); }
 
-.exec-events { max-height: 55vh; overflow-y: auto; }
+/* La colonne gauche tient dans le viewport : Contrôle garde sa hauteur,
+   Événements prend le reste et scrolle en interne — les derniers événements
+   restent visibles même quand Contrôle grossit (run en cours). */
+.exec-col-left {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 56px - 41px - 2 * 28px);
+}
+.exec-card-events {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.exec-events { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .exec-events-empty { padding: 20px; color: var(--text3); font-size: 13px; text-align: center; }
 
 .evt-row {
@@ -1381,7 +1412,7 @@ si distance(agent1) ≤ 100 m : tourner autour de l'agent 1</code>
         <div class="exec-card-hd">Contrôle</div>
         <div class="exec-card-body" id="exec-control"></div>
       </div>
-      <div class="exec-card">
+      <div class="exec-card exec-card-events">
         <div class="exec-card-hd">Événements</div>
         <div class="exec-events" id="exec-events">
           <div class="exec-events-empty">Les événements du run apparaîtront ici.</div>
@@ -1862,9 +1893,9 @@ function loadList() {
       return;
     }
     el.innerHTML = list.map(n => `
-      <div class="sc-item ${n === current ? 'active' : ''}">
-        <span class="sc-name" onclick="selectScenario('${n}')">${n}</span>
-        <button class="sc-btn del" title="Supprimer" onclick="deleteScenario('${n}')">✕</button>
+      <div class="sc-item ${n === current ? 'active' : ''}" onclick="selectScenario('${n}')">
+        <span class="sc-name">${n}</span>
+        <button class="sc-btn del" title="Supprimer" onclick="event.stopPropagation(); deleteScenario('${n}')">✕</button>
       </div>
     `).join('');
   });
